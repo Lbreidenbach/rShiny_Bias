@@ -93,7 +93,7 @@ ui <- fluidPage(
 
                                            width = 12)
              )
-             ),
+             ), 
              sidebarLayout(position = "right",
 
                            fluidRow(column(6, sidebarPanel(h4("---Set Distributions---", align = "center"),
@@ -108,13 +108,14 @@ ui <- fluidPage(
                                                                 More complicated relationships like interactions and non-linearity can be modeled in the McBias Library for R<br>
                                                                 ___________</i>"),
                                                            uiOutput("beta_box"),
+                                                           (HTML("<br><i>Finished all node inputs? Time to set the analysis<br> ___________</i>")),
+                                                           actionButton("analysis_ui", "Set Analysis!"),
 
                                                            width = 12
                            )),
                            ),
                            column(6, align = "center", mainPanel(h4("Dag plot"),
                                                                  grVizOutput("value"),
-
 
                                                                  width = 12
                            )),
@@ -125,7 +126,8 @@ ui <- fluidPage(
 
 
     ),
-    tabPanel("Set anaylsis", fluid = TRUE,
+    conditionalPanel(condition = ("input.analysis_ui != 0"),
+                     title = "Set anaylsis", fluid = TRUE,
              sidebarLayout(
                sidebarPanel(h4("---Set Analysis---", align = "center"),
                             uiOutput("exp"),
@@ -140,8 +142,7 @@ ui <- fluidPage(
                ),
                mainPanel(fluidRow(column(12, mainPanel(h4("Plot appears here once analysis is set and the simulate button is pressed ", align ="center"),
                                                        plotOutput("bn_results"),
-                                                       
-                                                       #verbatimTextOutput("table"),
+                                                       tableOutput("bn_table"),
                                                        width = 12)
                )
                )
@@ -176,6 +177,7 @@ server <- function(input, output, session) {
 
   observeEvent(input$dag_text, {
     #beta interface
+    input.analysis_ui =0
     beta_id = get_arrows(input$dag_text)
     output$beta_box = renderUI(
       map(beta_id, ~textInput3(.x, paste0( .x), value = 0))
@@ -203,10 +205,8 @@ server <- function(input, output, session) {
     names(handler_list) <- new_id
     handler(handler_list)
 
-
-
-
   })
+  
 
   output$exp = renderUI({
     x = node_ids()
@@ -494,7 +494,11 @@ server <- function(input, output, session) {
     run_code(user_code())
 
   })
-  output$analysis_info = renderPrint({
+  output$bn_table = renderTable({
+    
+    table_code(user_code())
+  })
+  output$analysis_info = renderTable({
     x = node_ids()
     beta_id = beta_ids()
     beta_df = data.frame(parent = unlist(lapply(beta_id, function(x){strsplit(x, " -> ")[[1]][1]})),
