@@ -5,7 +5,7 @@ library(rjags)
 library(MatchIt)
 library(ggplot2)
 library(plyr)
-
+library(shinydashboard)
 library(dplyr)
 library(gtable)
 library(grid)
@@ -16,6 +16,7 @@ library(gridExtra)
 source("plot_dag_ui2.R")
 library(purrr)
 library(McBias)
+library(bslib)
 
 set_p = function(p,model){
   p2 = log(p/(1-p))
@@ -73,8 +74,7 @@ node_server <- function(input, output, session) {
 
 ui <- fluidPage(
   titlePanel(h1("Bias Simulator", align ="center")),
-  tabsetPanel(
-    tabPanel("Set Bayesian Network", fluid = TRUE,
+
              fluidRow(column(12, mainPanel(HTML("<b>Input the directed acyclic graph formula in the text box below and follow this format:</b><br>
                                   1. Start formula with '~'<br>
                                   2. Write which variables cause others like this: 'effect|cause1*cause2*cause_n' or like this 'effect|cause1 + effect|cause2 + effect|cause_n'. <br>
@@ -94,6 +94,7 @@ ui <- fluidPage(
                                            width = 12)
              )
              ), 
+             #sidebar
              sidebarLayout(position = "right",
 
                            fluidRow(column(6, sidebarPanel(h4("---Set Distributions---", align = "center"),
@@ -123,44 +124,57 @@ ui <- fluidPage(
 
 
              ),
+    
+    conditionalPanel(
+      condition = ("input.analysis_ui != 0"),
 
-
-    ),
-    conditionalPanel(condition = ("input.analysis_ui != 0"),
                      title = "Set anaylsis", fluid = TRUE,
-             sidebarLayout(
-               sidebarPanel(h4("---Set Analysis---", align = "center"),
-                            uiOutput("exp"),
-                            uiOutput("out"),
-                            uiOutput("sel"),
-                            uiOutput("sel_op"),
-                            uiOutput("conf"),
-                            uiOutput("conf_op"),
-                            #numericInput("n_data", "Number of samples per dataset \n(takes a minute to calculate when n>100,000 n>1,000,000 not recommended)", 10000, min = 5, step = 1),
-                            #numericInput("iteration", "Number of datasets created and analyzed \n(i>300 not recommended)", 100, min = 2, step = 1),
-                            actionButton("sim", "Simulate! (takes a few seconds)")
-               ),
-               mainPanel(fluidRow(column(12, mainPanel(h4("Plot appears here once analysis is set and the simulate button is pressed ", align ="center"),
-                                                       plotOutput("bn_results"),
-                                                       tableOutput("bn_table"),
-                                                       width = 12)
-               )
-               )
+                     
+              fluidRow(id = 'test',
+                       tags$style('#test {
+                             background-color: #d6e7e9;
+              }'),
+                       h4("---Set Analysis---", align = "center"),
+                       column(3,uiOutput("exp")),
+                       
+                       column(3,uiOutput("out")),
+                       
+                       column(3,uiOutput("sel"),
+                              uiOutput("sel_op")),
+                       
+                       column(3,
+                              uiOutput("conf"),
+                              uiOutput("conf_op"),
+                              ),
+                       
+                       #numericInput("n_data", "Number of samples per dataset \n(takes a minute to calculate when n>100,000 n>1,000,000 not recommended)", 10000, min = 5, step = 1),
+                       #numericInput("iteration", "Number of datasets created and analyzed \n(i>300 not recommended)", 100, min = 2, step = 1),
+                       column(12, align = "center", actionButton("sim", "Simulate! (takes a few seconds)"))
+                       )
 
-               )
-             ),
-             fluidRow(column(12, mainPanel(h3(HTML("This code recreates your input <i><u>Bayesian Network</i></u> in R"), align ="left"),
-                                           p("If the McBias library is in use, this code can be copy/pasted to get a working dag object and results matrix"),
-                                           verbatimTextOutput("bn_info"),
-                                           h3(HTML("This code recreates your input <i><u>analysis settings</u></i> in R"), align ="left"),
-                                           p(HTML("This code can be copy/pasted from this box to run the set analysis on the created Bayesian network.<br>")),
-                                           verbatimTextOutput("analysis_info"),
-                                           p(HTML("<i>*Due to server bandwidth limitations, the rShiny app sets dataset population <u>n = 10000</u> and the number of MCMC <u>runs = 100,<br>you may want to change this when using the library</u></i>")),
-                                           width = 12)
-             )
-             )
-    )
-  ),
+               
+
+                
+    ),
+    conditionalPanel(condition = ("input.sim != 0"),
+                     fluidRow(column(12, mainPanel(h4("Plot appears here once analysis is set and the simulate button is pressed ", align ="center"),
+                                                   plotOutput("bn_results"),
+                                                   tableOutput("bn_table"),
+                                                   width = 12)
+                     )
+                     ),
+                     
+                     fluidRow(column(12, mainPanel(h3(HTML("This code recreates your input <i><u>Bayesian Network</i></u> in R"), align ="left"),
+                                                   p("If the McBias library is in use, this code can be copy/pasted to get a working dag object and results matrix"),
+                                                   verbatimTextOutput("bn_info"),
+                                                   h3(HTML("This code recreates your input <i><u>analysis settings</u></i> in R"), align ="left"),
+                                                   p(HTML("This code can be copy/pasted from this box to run the set analysis on the created Bayesian network.<br>")),
+                                                   verbatimTextOutput("analysis_info"),
+                                                   p(HTML("<i>*Due to server bandwidth limitations, the rShiny app sets dataset population <u>n = 10000</u> and the number of MCMC <u>runs = 100,<br>you may want to change this when using the library</u></i>")),
+                                                   width = 12)
+                     )
+                     )
+                     )
 
 
 )
@@ -176,6 +190,8 @@ server <- function(input, output, session) {
   output$value = renderGrViz({ dag_ui(paste(input$dag_text)) })
 
   observeEvent(input$dag_text, {
+    updateNumericInput(session, "analysis_ui", value = 0)
+    
     #beta interface
     input.analysis_ui =0
     beta_id = get_arrows(input$dag_text)
