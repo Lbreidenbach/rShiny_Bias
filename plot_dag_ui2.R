@@ -854,11 +854,24 @@ run_code = function(out_code){
   eval(parse(text = out_code))
   try_plot = ci_ridges(run_1)
   
-  return(try_plot)
+  try_table = beta_summary(run_1)
+  try_table = as.data.frame(try_table)
+  
+  export_table = data.frame("Bias,\n ± Std. error" = c(paste0(signif(try_table$bias,4), ", ±", signif(try_table$bias_se,4))),
+                            "Coverage , ± Std. error" = c(paste0(signif(try_table$coverage, 3), ", ±", signif(try_table$coverage_se,3))),
+                            "Null rejectuon rate, ±Std. error" = c(paste0(signif(try_table$rejection_rate, 3), ", ±", signif(try_table$rejection_rate_se,3))),
+                            "Mean estimate" = signif(try_table$mean_b_estimate,4),
+                            "Estimate standard deviation" = signif(try_table$b_estimate_std_dev,4),
+                            check.names=FALSE
+  )
+  rownames(export_table) = rownames(try_table)
+  run_list = list(try_plot,export_table)
+  
+  return(run_list)
 
 }
 table_code = function(out_code){
-  eval(parse(text = out_code))
+  # eval(parse(text = out_code))
   
   try_table = beta_summary(run_1)
   try_table = as.data.frame(try_table)
@@ -870,6 +883,7 @@ table_code = function(out_code){
                             "Estimate standard deviation" = signif(try_table$b_estimate_std_dev,4),
                             check.names=FALSE
                             )
+  rownames(export_table) = rownames(try_table)
   #colnames(try_table) = c("Bias", "Std")
   return(export_table)
   

@@ -18,6 +18,7 @@ library(purrr)
 library(McBias)
 library(bslib)
 
+
 set_p = function(p,model){
   p2 = log(p/(1-p))
   b0 = p2-model
@@ -72,112 +73,115 @@ node_server <- function(input, output, session) {
   return_value
 }
 
-ui <- fluidPage(
-  titlePanel(h1("Bias Simulator", align ="center")),
+ui <- 
+  page_fillable(
+    titlePanel(h1("Bias Simulator", align ="center")),
+    theme = bs_theme(bootswatch = "minty"),
+    card(accordion(
+            accordion_panel(
+              "Set DAG",
+              HTML("<b>Input the directed acyclic graph formula in the text box below and follow this format:</b><br>
+                                          1. Start formula with '~'<br>
+                                          2. Write which variables cause others like this: 'effect|cause1*cause2*cause_n' or like this 'effect|cause1 + effect|cause2 + effect|cause_n'. <br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b causes c, write 'b|a + c|b' or 'c|b + b|a'<br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b, and c has no effect on either, write 'b|a + c'<br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; There must be at least one variable that affects another<br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Nodes can't have names with spaces<br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Formula can't be cyclical. Cyclical formaulas include:<br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Self referencing nodes like 'a|a'<br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Bi-directional arrows like 'b|a + a|b'<br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Cycles like 'c|b + b|a + a|c'<br>
+                                          3. Once the formula is entered, fill out the additional node info on the side"),
+              textInput(
+                "dag_text", label = h3("DAG formula box"),
+                value = "~exposure|confounder + outcome|confounder*exposure + collider|exposure*outcome",
+                width = "100%"),
+              
+              
+              layout_columns(
+                            
+                            card(class="bg-primary",
+                                 
+                                 accordion(
+                                   accordion_panel(
+                                     "basic settings",
+                                     h4("---Set Distributions---", align = "center"),
+                                     HTML("<i>Gaussian distribution assumes non-skewness. More distributions options are availible in the McBias Library for R<br> ___________</i>"),
+                                     uiOutput("node_box"),
+                                     div(id="placeholder"),
+                                     h4("---Set Beta Values---", align = "center"),
+                                     HTML("<i><b>The beta values represent the following measures:<br>
+                            Any node -> binary node = log(odds ratio)<br>
+                            Binary node -> Gaussian node = means difference<br>
+                            Gaussian node -> Gaussian node = linear coefficient<br></b>
+                            More complicated relationships like interactions and non-linearity can be modeled in the McBias Library for R<br>
+                            ___________</i>"),
+                                     uiOutput("beta_box"),
+                                     (HTML("<br><i>Finished all node inputs? Time to set the analysis<br> ___________</i>"))
+                                     
+                                     
+                                   ), #simple panel
+                                   accordion_panel(
+                                     "advanced settings",
+                                     textAreaInput("custom_equation",
+                                                   label = "Write in Desired Dag equations here",
+                                                   width = "100%",
+                                                   rows = 8,
+                                                   placeholder = "Code for DAG"
+                                                   ),
+                                     p("Current Code:"),
+                                     verbatimTextOutput("bn_info"),
+                                   ) #advanced panel
+                                   
+                                 ),     
+                            
+                            ),
+                            card(
+                              
+                            align = "center", mainPanel(h4("Dag plot"),
+                            grVizOutput("value")
+                                                                  
+                            ),
+                            
+                            ),
+                            
+                            
+              ),
+              actionButton("analysis_ui", "Set Analysis!")
+              
+      ), #ends accordion panel 1
+      accordion_panel(
+        "Set Analysis",
+        h4("---Set Analysis---", align = "center"),
+        uiOutput("exp"),
+        uiOutput("out"),
+        uiOutput("sel"),
+        uiOutput("sel_op"),
+        uiOutput("conf"),
+        uiOutput("conf_op"),
+        
+        actionButton("sim", "Simulate! (takes a few seconds)")
 
-             fluidRow(column(12, mainPanel(HTML("<b>Input the directed acyclic graph formula in the text box below and follow this format:</b><br>
-                                  1. Start formula with '~'<br>
-                                  2. Write which variables cause others like this: 'effect|cause1*cause2*cause_n' or like this 'effect|cause1 + effect|cause2 + effect|cause_n'. <br>
-                                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b causes c, write 'b|a + c|b' or 'c|b + b|a'<br>
-                                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b, and c has no effect on either, write 'b|a + c'<br>
-                                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; There must be at least one variable that affects another<br>
-                                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Nodes can't have names with spaces<br>
-                                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Formula can't be cyclical. Cyclical formaulas include:<br>
-                                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Self referencing nodes like 'a|a'<br>
-                                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Bi-directional arrows like 'b|a + a|b'<br>
-                                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Cycles like 'c|b + b|a + a|c'<br>
-                                  3. Once the formula is entered, fill out the additional node info on the side"),
-                                           textInput("dag_text", label = h3("DAG formula box"),
-                                                     value = "~exposure|confounder + outcome|confounder*exposure + collider|exposure*outcome",
-                                                     width = "100%"),
+      ), #ends accordion panel 2
+      accordion_panel(
+        "Simulation Results and Code",
+        h4("Plot appears here once analysis is set and the simulate button is pressed ", align ="center"),
+        plotOutput("bn_results"),
+        tableOutput("bn_table"),
+        h3(HTML("This code recreates your input <i><u>Bayesian Network</i></u> in R"), align ="left"),
+        p("If the McBias library is in use, this code can be copy/pasted to get a working dag object and results matrix"),
+        
+        h3(HTML("This code recreates your input <i><u>analysis settings</u></i> in R"), align ="left"),
+        p(HTML("This code can be copy/pasted from this box to run the set analysis on the created Bayesian network.<br>")),
+        verbatimTextOutput("analysis_info"),
+        p(HTML("<i>*Due to server bandwidth limitations, the rShiny app sets dataset population <u>n = 10000</u> and the number of MCMC <u>runs = 100,<br>you may want to change this when using the library</u></i>")),
+        
+        
+      ) #ends accordion panel 3
+    ) #ends accordion
+    )
+  )
 
-                                           width = 12)
-             )
-             ), 
-             #sidebar
-             sidebarLayout(position = "right",
-
-                           fluidRow(column(6, sidebarPanel(h4("---Set Distributions---", align = "center"),
-                                                           HTML("<i>Gaussian distribution assumes non-skewness. More distributions options are availible in the McBias Library for R<br> ___________</i>"),
-                                                           uiOutput("node_box"),
-                                                           div(id="placeholder"),
-                                                           h4("---Set Beta Values---", align = "center"),
-                                                           HTML("<i><b>The beta values represent the following measures:<br>
-                                                                Any node -> binary node = log(odds ratio)<br>
-                                                                Binary node -> Gaussian node = means difference<br>
-                                                                Gaussian node -> Gaussian node = linear coefficient<br></b>
-                                                                More complicated relationships like interactions and non-linearity can be modeled in the McBias Library for R<br>
-                                                                ___________</i>"),
-                                                           uiOutput("beta_box"),
-                                                           (HTML("<br><i>Finished all node inputs? Time to set the analysis<br> ___________</i>")),
-                                                           actionButton("analysis_ui", "Set Analysis!"),
-
-                                                           width = 12
-                           )),
-                           ),
-                           column(6, align = "center", mainPanel(h4("Dag plot"),
-                                                                 grVizOutput("value"),
-
-                                                                 width = 12
-                           )),
-
-
-
-             ),
-    
-    conditionalPanel(
-      condition = ("input.analysis_ui != 0"),
-
-                     title = "Set anaylsis", fluid = TRUE,
-                     
-              fluidRow(id = 'test',
-                       tags$style('#test {
-                             background-color: #d6e7e9;
-              }'),
-                       h4("---Set Analysis---", align = "center"),
-                       column(3,uiOutput("exp")),
-                       
-                       column(3,uiOutput("out")),
-                       
-                       column(3,uiOutput("sel"),
-                              uiOutput("sel_op")),
-                       
-                       column(3,
-                              uiOutput("conf"),
-                              uiOutput("conf_op"),
-                              ),
-                       
-                       #numericInput("n_data", "Number of samples per dataset \n(takes a minute to calculate when n>100,000 n>1,000,000 not recommended)", 10000, min = 5, step = 1),
-                       #numericInput("iteration", "Number of datasets created and analyzed \n(i>300 not recommended)", 100, min = 2, step = 1),
-                       column(12, align = "center", actionButton("sim", "Simulate! (takes a few seconds)"))
-                       )
-
-               
-
-                
-    ),
-    conditionalPanel(condition = ("input.sim != 0"),
-                     fluidRow(column(12, mainPanel(h4("Plot appears here once analysis is set and the simulate button is pressed ", align ="center"),
-                                                   plotOutput("bn_results"),
-                                                   tableOutput("bn_table"),
-                                                   width = 12)
-                     )
-                     ),
-                     
-                     fluidRow(column(12, mainPanel(h3(HTML("This code recreates your input <i><u>Bayesian Network</i></u> in R"), align ="left"),
-                                                   p("If the McBias library is in use, this code can be copy/pasted to get a working dag object and results matrix"),
-                                                   verbatimTextOutput("bn_info"),
-                                                   h3(HTML("This code recreates your input <i><u>analysis settings</u></i> in R"), align ="left"),
-                                                   p(HTML("This code can be copy/pasted from this box to run the set analysis on the created Bayesian network.<br>")),
-                                                   verbatimTextOutput("analysis_info"),
-                                                   p(HTML("<i>*Due to server bandwidth limitations, the rShiny app sets dataset population <u>n = 10000</u> and the number of MCMC <u>runs = 100,<br>you may want to change this when using the library</u></i>")),
-                                                   width = 12)
-                     )
-                     )
-                     )
-
-
-)
 
 # Define server logic ----
 server <- function(input, output, session) {
@@ -187,13 +191,14 @@ server <- function(input, output, session) {
   beta_ids = reactiveVal()
   dag_code = reactiveVal()
 
+
   output$value = renderGrViz({ dag_ui(paste(input$dag_text)) })
 
   observeEvent(input$dag_text, {
     updateNumericInput(session, "analysis_ui", value = 0)
     
     #beta interface
-    input.analysis_ui =0
+    input.analysis_ui = 0
     beta_id = get_arrows(input$dag_text)
     output$beta_box = renderUI(
       map(beta_id, ~textInput3(.x, paste0( .x), value = 0))
@@ -222,7 +227,6 @@ server <- function(input, output, session) {
     handler(handler_list)
 
   })
-  
 
   output$exp = renderUI({
     x = node_ids()
@@ -349,8 +353,6 @@ server <- function(input, output, session) {
       test_df[names(std_vals), 5] = std_vals
     }
 
-
-
     colnames(test_df) = c("distribution", "holder", "prevalence", "mean", "std_dev", "names")
     beta_df = data.frame(parent = unlist(lapply(beta_id, function(x){strsplit(x, " -> ")[[1]][1]})),
                          child = unlist(lapply(beta_id, function(x){strsplit(x, " -> ")[[1]][2]})),
@@ -459,6 +461,14 @@ server <- function(input, output, session) {
     # lapply(c(1:length(x)), function(i) length(parent_list[[i]][[1]]))
 
   })
+  
+  output$text_out = renderPrint({
+    
+  })
+  
+  observeEvent(input$custom_equation,{
+    cat(dag_code(input$custom_equation))
+  })
 
   user_code = eventReactive(input$sim, {
     x = node_ids()
@@ -502,19 +512,19 @@ server <- function(input, output, session) {
       ' , sb = ', sb,
       ', n = ', 20000,
       ')')
-    user_code = capture.output(cat(c(dag_code(), outcome)))
+    user_code = run_code(capture.output(cat(c(dag_code(), outcome))))
+    # code_output(run_code(user_code()))
+    
 
   })
   output$bn_results = renderPlot({
-
-    run_code(user_code())
-
+    user_code()[1]
   })
+  
   output$bn_table = renderTable({
-    
-    table_code(user_code())
+    user_code()[2]
   })
-  output$analysis_info = renderTable({
+  output$analysis_info = renderPrint({
     x = node_ids()
     beta_id = beta_ids()
     beta_df = data.frame(parent = unlist(lapply(beta_id, function(x){strsplit(x, " -> ")[[1]][1]})),
