@@ -30,6 +30,27 @@ textInput3<-function (inputId, label, value = "",...) {
       tags$label(label, `for` = inputId),
       tags$input(id = inputId, type = "text", value = value,...))
 }
+textInput4<-function (inputId, label, value = "",...) {
+  div(tags$style(type="text/css", "text {width:100%}") ,
+      tags$label(label, `for` = inputId),
+#      tags$textarea(id=inputId, type = "text", rows=2, ...),
+      tags$input(id = inputId, type = "text", value = value,...)) 
+  # div(tags$label(label, `for` = inputId),
+  #     tags$input(id = inputId, type = "text", value = value, width = "100%",...))
+}
+# set_node_ui <- function(inputId, label, value = "",...) {
+#   div(style="display:inline-block",
+#       tags$label(label, `for` = inputId),
+#       tags$input(id = inputId, type = "text", value = value,...))  
+#   fluidRow(
+#     p(paste0("Set equation for Node: ",id)),
+#     textInput(ns("node_equation"),
+#               value =paste0("dag = setNode(dag, ",id, " , nodeType = 'desired distribution', ... )"))
+#     
+#   )
+#   uiOutput(ns("ui_placeholder"))
+# }
+
 
 node_ui <- function(id) {
   ns <- NS(id)
@@ -45,6 +66,7 @@ node_ui <- function(id) {
     )
   )
 }
+
 
 node_server <- function(input, output, session) {
   return_value <- reactive({list(distribution = input$node_dist, prevalence = input$prev,
@@ -78,7 +100,7 @@ ui <-
     titlePanel(h1("Bias Simulator", align ="center")),
     theme = bs_theme(bootswatch = "minty"),
     card(accordion(
-            accordion_panel(
+            accordion_panel( id = "set_dag",
               "Set DAG",
               HTML("<b>Input the directed acyclic graph formula in the text box below and follow this format:</b><br>
                                           1. Start formula with '~'<br>
@@ -102,8 +124,8 @@ ui <-
                             
                             card(class="bg-primary",
                                  
-                                 accordion(
-                                   accordion_panel(
+                                 #accordion(
+                                   #accordion_panel(
                                      "basic settings",
                                      h4("---Set Distributions---", align = "center"),
                                      HTML("<i>Gaussian distribution assumes non-skewness. More distributions options are availible in the McBias Library for R<br> ___________</i>"),
@@ -115,25 +137,19 @@ ui <-
                             Binary node -> Gaussian node = means difference<br>
                             Gaussian node -> Gaussian node = linear coefficient<br></b>
                             More complicated relationships like interactions and non-linearity can be modeled in the McBias Library for R<br>
-                            ___________</i>"),
+                            ___________</i><br>"),
                                      uiOutput("beta_box"),
-                                     (HTML("<br><i>Finished all node inputs? Time to set the analysis<br> ___________</i>"))
+                                     (HTML("<br><i>Finished all node inputs? Time to set the analysis<br> ___________</i><br>"))
                                      
                                      
-                                   ), #simple panel
-                                   accordion_panel(
-                                     "advanced settings",
-                                     textAreaInput("custom_equation",
-                                                   label = "Write in Desired Dag equations here",
-                                                   width = "100%",
-                                                   rows = 8,
-                                                   placeholder = "Code for DAG"
-                                                   ),
-                                     p("Current Code:"),
-                                     verbatimTextOutput("bn_info"),
-                                   ) #advanced panel
+                                   #), #simple panel
+                                   # accordion_panel(
+                                   #   "advanced settings",
+                                   #   uiOutput("set_nodes"),
+                                   #   verbatimTextOutput("bn_info")
+                                   # ) #advanced panel
                                    
-                                 ),     
+                                 #),     
                             
                             ),
                             card(
@@ -147,11 +163,12 @@ ui <-
                             
                             
               ),
-              actionButton("analysis_ui", "Set Analysis!")
+              #actionButton("analysis_ui", "Set Analysis!")
               
       ), #ends accordion panel 1
-      accordion_panel(
+      accordion_panel( id = "set_analysis",
         "Set Analysis",
+          
         h4("---Set Analysis---", align = "center"),
         uiOutput("exp"),
         uiOutput("out"),
@@ -159,18 +176,18 @@ ui <-
         uiOutput("sel_op"),
         uiOutput("conf"),
         uiOutput("conf_op"),
-        
-        actionButton("sim", "Simulate! (takes a few seconds)")
+        actionButton("sim", "Simulate! (takes a few seconds)", width = "100%")
 
       ), #ends accordion panel 2
-      accordion_panel(
+      accordion_panel(id = "sim_results",
         "Simulation Results and Code",
-        h4("Plot appears here once analysis is set and the simulate button is pressed ", align ="center"),
+        h4("Plot appears here once analysis is set and the simulate button in 'Set Analysis' is pressed ", align ="center"),
+        
         plotOutput("bn_results"),
-        tableOutput("bn_table"),
+        htmlOutput("bn_table"),
         h3(HTML("This code recreates your input <i><u>Bayesian Network</i></u> in R"), align ="left"),
         p("If the McBias library is in use, this code can be copy/pasted to get a working dag object and results matrix"),
-        
+        verbatimTextOutput("bn_info"),
         h3(HTML("This code recreates your input <i><u>analysis settings</u></i> in R"), align ="left"),
         p(HTML("This code can be copy/pasted from this box to run the set analysis on the created Bayesian network.<br>")),
         verbatimTextOutput("analysis_info"),
@@ -189,7 +206,9 @@ server <- function(input, output, session) {
   handler = reactiveVal(list())
   node_ids = reactiveVal()
   beta_ids = reactiveVal()
+  custom_nodes = reactiveVal()
   dag_code = reactiveVal()
+
 
 
   output$value = renderGrViz({ dag_ui(paste(input$dag_text)) })
@@ -205,6 +224,7 @@ server <- function(input, output, session) {
 
     )
 
+
     #node distribution interface
     x = get_nodes(input$dag_text)
     ui_num = length(x)
@@ -213,9 +233,16 @@ server <- function(input, output, session) {
     output$node_box = renderUI({
       map(new_id, ~node_ui(.x))
     })
+    
+    custom_id = get_custom(input$dag_text)
+    output$set_nodes = renderUI({
+      map(custom_id, ~textInput3(.x, label = paste0( .x), value = "", placeholder = "dag = setNode(dag, node, nodeType = 'distribution', ...)"))
+    })
 
     node_ids(x)
     beta_ids(beta_id)
+    custom_nodes(custom_id)
+
 
     handler_list <- isolate(handler())
 
@@ -227,14 +254,11 @@ server <- function(input, output, session) {
     handler(handler_list)
 
   })
+  
 
   output$exp = renderUI({
     x = node_ids()
-
-    fluidRow(column(12,
-                    selectInput("exp", "Exposure", choices = x)
-    )
-    )
+    selectInput("exp", "Exposure", choices = x)
 
   })
 
@@ -318,10 +342,16 @@ server <- function(input, output, session) {
     }
 
   })
+  
+
 
   output$bn_info = renderPrint({
     x = node_ids()
     beta_id = beta_ids()
+    # custom_id = custom_nodes()
+    # if(length(custom_id) > 0){
+    #   cat(custom_id)
+    # }
 
     test_df = data.frame(unlist(lapply(handler(), function(handle) {
       handle()[["distribution"]]
@@ -457,20 +487,23 @@ server <- function(input, output, session) {
 
     dag_code(code_dag)
     cat(code_dag)
+    #cat(custom_id)
 
     # lapply(c(1:length(x)), function(i) length(parent_list[[i]][[1]]))
 
   })
   
   output$text_out = renderPrint({
-    
+    cat(dag_code())
   })
   
   observeEvent(input$custom_equation,{
-    cat(dag_code(input$custom_equation))
+    
   })
 
   user_code = eventReactive(input$sim, {
+    accordion_panel_open(id = "sim_results", values = "Simulation Results and Code")
+    
     x = node_ids()
     beta_id = beta_ids()
     beta_df = data.frame(parent = unlist(lapply(beta_id, function(x){strsplit(x, " -> ")[[1]][1]})),
@@ -512,17 +545,29 @@ server <- function(input, output, session) {
       ' , sb = ', sb,
       ', n = ', 20000,
       ')')
+    
+    # ui.update_accordion_panel(
+    #   "sim_results",
+    #   show=show,
+    # )
+    
     user_code = run_code(capture.output(cat(c(dag_code(), outcome))))
+
     # code_output(run_code(user_code()))
     
-
   })
+  
   output$bn_results = renderPlot({
     user_code()[1]
   })
   
-  output$bn_table = renderTable({
-    user_code()[2]
+  output$bn_table = renderUI({
+    tags$div(
+      HTML((user_code()[[2]]))
+    )
+   
+    
+    
   })
   output$analysis_info = renderPrint({
     x = node_ids()

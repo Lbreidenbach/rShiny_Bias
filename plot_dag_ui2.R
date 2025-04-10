@@ -12,6 +12,278 @@ library("reshape2")
 library(gridExtra)
 library(McBias)
 # 
+
+beta_sum = function(run, a=0.05){
+  
+  #call needed data
+  
+  
+  ate = unique(as.numeric(run[[9]]))
+  calc_ate = as.data.frame(run[[2]])
+  lower_int = as.data.frame(run[[3]])
+  upper_int = as.data.frame(run[[4]])
+  p_val = as.data.frame(run[[5]])
+  n=length(calc_ate[[1]])
+  
+  #parse data
+  names= unlist(lapply(colnames(lower_int), function(y) rep(y, nrow(lower_int))))
+  upper_int= as.numeric(unlist(upper_int))
+  lower_int = as.numeric(unlist(lower_int))
+  calc_ate = as.numeric(unlist(calc_ate))
+  p_val = as.numeric(unlist(p_val))
+  data = dplyr::tibble(names,lower_int, upper_int, calc_ate, p_val)
+  data_ci = data %>% dplyr::filter(lower_int <= ate & upper_int >= ate)
+  data_under_ci = data %>% dplyr::filter(upper_int < ate)
+  data_over_ci = data %>% dplyr::filter(lower_int > ate)
+  data_ci$in_ci = 1
+  data_under_ci$in_ci = 0
+  data_over_ci$in_ci = 0
+  data_ci$over_ci = 0
+  data_ci$under_ci = 0
+  data_under_ci$over_ci = 0
+  data_over_ci$over_ci = 1
+  data_under_ci$under_ci = 1
+  data_over_ci$under_ci = 0
+  
+  data_under_a = data %>% dplyr::filter(p_val <= a)
+  
+  data = rbind(data_ci, data_over_ci, data_under_ci)
+  #max((data_ci %>% dplyr::filter(names == "logistic_or"))[4])
+  
+  #create summary functions
+  max_ci_beta = sapply(unique(data$names), function(x) max((data_ci %>% dplyr::filter(names == x))[4]))
+  min_ci_beta = sapply(unique(data$names), function(x) min((data_ci %>% dplyr::filter(names == x))[4]))
+  max_beta = sapply(unique(data$names), function(x) max((data %>% dplyr::filter(names == x))[4]))
+  min_beta = sapply(unique(data$names), function(x) min((data %>% dplyr::filter(names == x))[4]))
+  mean_beta = sapply(as.list(unique(data$names)), function(x) mean((data %>% dplyr::filter(names == x))[[4]]))
+  names(mean_beta) = colnames(run[[2]])
+  sd_beta = sapply(as.list(unique(data$names)), function(x) sd((data %>% dplyr::filter(names == x))[[4]]))
+  if(is.null(dim(run[[1]]))==T){
+    prop_over_ci = sum(data$over_ci)/length(data$over_ci)
+    prop_under_ci = sum(data$under_ci/length(data$under_ci))
+    beta_bias_mcse =sapply(as.list(unique(data$names)), function(x) sqrt(sum(((data %>% dplyr::filter(names == x))[[4]]-mean_beta)^2) * 1/(n*(n-1))) )
+    
+  }else{
+    
+    prop_over_ci = sapply(unique(data$names), function(x) length((data_over_ci %>% dplyr::filter(names == x))[[4]])/length(run[[1]][,1]))
+    prop_under_ci = sapply(unique(data$names), function(x) length((data_under_ci %>% dplyr::filter(names == x))[[4]])/length(run[[1]][,1]))
+    beta_bias_mcse =sapply(as.list(unique(data$names)), function(x) sqrt(sum(((data %>% dplyr::filter(names == x))[[4]]-mean_beta[[x]])^2) * 1/(n*(n-1))) )
+  }
+  
+  beta_se =  sapply(as.list(unique(data$names)), function(x) sd((data %>% dplyr::filter(names == x))[[4]])/sqrt(n))
+  beta_bias = mean_beta-ate
+  
+  reject_per = sapply(unique(data$names), function(x) length((data_under_a %>% dplyr::filter(names == x))[[4]])/n)
+  coverage = 1-(prop_over_ci+prop_under_ci)
+  
+  #MCMC std error of functions
+  
+  coverage_mcse = sqrt((coverage*(1-coverage))/n)
+  reject_per_mcse = sqrt((reject_per*(1-reject_per))/n)
+  
+  #amalgamte into model
+  beta_in_ci = as.data.frame(rbind(max_ci_beta, min_ci_beta, max_beta, min_beta, mean_beta, sd_beta, prop_over_ci, prop_under_ci,
+                                   beta_se, beta_bias, reject_per, coverage,
+                                   beta_bias_mcse, reject_per_mcse, coverage_mcse)
+  )
+  beta_in_ci[sapply(beta_in_ci, is.infinite)]=NA
+  if(is.null(dim(run[[1]]))==T){
+    colnames(beta_in_ci) = "regression"
+    
+  }else{
+    beta_in_ci = beta_in_ci[,c(colnames(run[[1]]))] #reorder columns to original run order for indexing
+    
+    
+  }
+  return(beta_in_ci)
+  
+}
+
+ci_ridges = function(run, title =NULL, subtitle=NULL){
+  ate_val = as.data.frame(run[[2]])
+  drawn_ci = beta_sum(run)
+  
+  if(is.null(dim(run[[1]]))==T){
+    colnames(ate_val) = "regression"
+    
+  }
+  
+  all_in_ci = unlist(lapply(c(1:ncol(ate_val)), function(x){
+    if(drawn_ci[7,x]==0&drawn_ci[8,x]==0){
+      return(TRUE)
+    }else{
+      return(FALSE)
+    }
+  } ))
+  
+  drawn_ci[drawn_ci==0] =NA
+  drawn_ci[drawn_ci==1] =NA
+  
+  # drawn_ci$tag = c(1,1,0,0)
+  # drawn_ci = drawn_ci[!(duplicated(drawn_ci[1:3]) | duplicated(drawn_ci[1:3], fromLast = TRUE)), ]
+  # drawn_ci = drawn_ci[drawn_ci$tag==1,]
+  # drawn_ci = drawn_ci[-length(drawn_ci)]
+  upper = sapply(drawn_ci[7,], function(x) rep(x, length(ate_val[[1]])))
+  lower = sapply(drawn_ci[8,], function(x) rep(x, length(ate_val[[1]])))
+  #rep(drawn_ci[,1],length(comp_df[[1]]))
+  
+  
+  names= unlist(lapply(colnames(ate_val), function(y) rep(y, nrow(ate_val))))
+  value= as.numeric(unlist(ate_val))
+  upper = 1- as.numeric(unlist(upper))
+  lower = as.numeric(unlist(lower))
+  
+  data=dplyr::tibble(names,value, upper, lower)
+  data$tag =0
+  data[data$value>0,]$tag = 1
+  data$names = as.factor(data$names)
+  data$tag = as.character(data$tag)
+  
+  lines = drawn_ci[1:2, , drop = FALSE]
+  nas_df = drawn_ci[7:8, , drop = FALSE]
+  #na_dex
+  inf_dex = which(is.na(nas_df[1,]))
+  neg_inf_dex = which(is.na(nas_df[2,]))
+  all_in_dex = which(all_in_ci==TRUE)
+  
+  lines[1, inf_dex]= Inf
+  lines[2, neg_inf_dex]= -Inf
+  
+  
+  
+  factor_df = as.data.frame(unique(as.integer(data$names)))
+  factor_df = t(factor_df)
+  colnames(factor_df) = unique(as.character(data$names))
+  rownames(factor_df) = "i"
+  
+  #FIX HERE, col name problem
+  lines = rbind(lines, factor_df, all_in_ci)
+  # rownames(lines[4, ]) = "all" #perhaps unneseccary??
+  
+  #lines = lines[,order(lines[nrow(lines),])]
+  
+  drawn_ci = rbind(drawn_ci, factor_df)
+  #drawn_ci = drawn_ci[,order(drawn_ci[nrow(drawn_ci),])]
+  
+  ###WORKING LINES
+  p <- ggplot2::ggplot(data, aes(x=value, y=names)) +
+    ggridges::stat_density_ridges(scale = 0.95,
+                                  quantile_lines = TRUE,
+                                  quantile_fun = function(x, ...) quantile(x, probs =
+                                                                             c(sort(c(mean(data[data$value == x,]$lower))), sort(c(mean(data[data$value == x,]$upper)))), na.rm = TRUE)
+    ) +
+    ggridges::theme_ridges(center = TRUE) +
+    ggplot2::ylab("Anaylsis Performed") +
+    ggplot2::xlab("Estimated Beta") +
+    ggplot2::ggtitle(label = paste(title),
+                     subtitle = paste(subtitle)) +
+    ggplot2::theme(plot.title = element_text(size = 18, face = "bold"),
+                   plot.subtitle = element_text(size = 12),
+                   axis.text = element_text(size = 14, face = "bold"),
+                   axis.title = element_text(size = 14, face = "bold")) +
+    ggplot2::scale_x_continuous(expand = c(0, 0)) +
+    ggplot2::scale_y_discrete(expand = expansion(mult = c(0.01, .1))) +
+    if(max(data$value) > 10 | min(data$value < -10)){
+      ggplot2::xlim(limits[1],limits[2])
+    }
+  p
+  
+  d <- ggplot_build(p)$data[[1]]
+  ribbon = function(upper, lower, i, all) {
+    if(upper == Inf & lower == -Inf & all == 0){
+      return()
+    }
+    q = ggplot2::geom_ribbon(
+      data = transform(subset(d, x <= upper & x >= lower & ymin == i), names = group),
+      ggplot2::aes(x, ymin = ymin, ymax = ymax, group = group),
+      fill = "lightblue2")
+    return(q)
+  }
+  # i = 3
+  # p + ribbon(lines[1,i], lines[2,i], lines[3,i])
+  # p + ribbon(-0.1, -0.2, 2)
+  q = p + lapply(c(1:ncol(lines)), function(x) ribbon(lines[1,x],lines[2,x],lines[3,x], lines[4,x]))
+  
+  # q =p + geom_ribbon(
+  #   data = transform(subset(d, x <= 0.0373545924 & x >= -0.0412792948 & ymin == 3), names = group),
+  #   aes(x, ymin = ymin, ymax = ymax, group = group),
+  #   fill = "lightblue2") +
+  #   geom_ribbon(
+  #     data = transform(subset(d, x <= 0.0348230349 & x >= -0.0357772047  & ymin == 2), names = group),
+  #     aes(x, ymin = ymin, ymax = ymax, group = group),
+  #     fill = "lightblue2") +
+  #   geom_ribbon(
+  #     data = transform(subset(d, ymin == 1), names = group),
+  #     aes(x, ymin = ymin, ymax = ymax, group = group),
+  #     fill = "lightblue2") +
+  #   geom_segment( aes(y=1, yend=length(colnames(ate_val))+1, x=run[[8]][1], xend=run[[8]][1]), color="navy", linetype = "dashed", lwd = 1)
+  
+  r = q+ ggridges::stat_density_ridges(scale = 0.95,
+                                       quantile_lines = TRUE,
+                                       quantile_fun = function(x, ...) quantile(x, probs =
+                                                                                  c(sort(c(mean(data[data$value == x,]$lower))), sort(c(mean(data[data$value == x,]$upper)))), na.rm = TRUE),
+                                       fill = "lightblue2",
+                                       alpha= 0.01) +
+    ggplot2::geom_vline( xintercept = run[[9]][1], color="navy", linetype = "dashed", lwd = 1)
+  
+  
+  
+  
+  ###
+  
+  
+  
+  # Construct the six grobs - three symbols and three labels
+  L1 = grid::rectGrob(height = .5, width = .5, gp = gpar(fill = "lightblue2", col = NA))
+  L2 = grid::rectGrob(height = .5, width = .5, gp = gpar(fill = "grey50", col = NA))
+  T1 = grid::textGrob("Yes", x = .2, just = "left")
+  T2 = grid::textGrob("No", x = .2, just = "left")
+  
+  
+  # Construct a gtable - 2 columns X 4 rows
+  leg = gtable::gtable(width = unit(c(1,1), "cm"), height = unit(c(1.8,1,1), "cm"))
+  
+  # Place the six grob into the table
+  leg = gtable::gtable_add_grob(leg, L1, t=2, l=1)
+  leg = gtable::gtable_add_grob(leg, L2, t=3, l=1)
+  leg = gtable::gtable_add_grob(leg, T1, t=2, l=2)
+  leg = gtable::gtable_add_grob(leg, T2, t=3, l=2)
+  
+  # Give it a title (if needed)
+  leg = gtable::gtable_add_grob(leg, grid::textGrob(expression(bold("True B in\n95% CI?")), vjust = 2), t=1, l=1, r=2)
+  #leg = gtable_add_grob(leg, textGrob(expression(bold("95% CI?"))), t=2, l=1, r=2)
+  # Get the ggplot grob for plot1
+  g = ggplot2::ggplotGrob(r)
+  
+  # Get the position of the panel,
+  # add a column to the right of the panel,
+  # put the legend into that column,
+  # and then add another spacing column
+  pos = g$layout[grepl("panel", g$layout$name), c('t', 'l')]
+  g = gtable::gtable_add_cols(g, sum(leg$widths), pos$l)
+  g = gtable::gtable_add_grob(g, leg, t = pos$t, l = pos$l + 1)
+  g = gtable::gtable_add_cols(g, unit(6, "pt"), pos$l)
+  
+  # Draw it
+  grid::grid.newpage()
+  return(grid::grid.draw(g))
+  
+}
+
+
+beta_summary = function(run, a = 0.05){
+  the_table = suppressWarnings(beta_sum(run,a))
+  the_table[c(7,8,11,12,14,15),] = the_table[c(7,8,11,12,14,15),]*100
+  the_table = the_table[c(5:8, 10:15), , drop = FALSE]
+  the_table = t(the_table)
+  the_table = as.data.frame(the_table)
+  the_table = the_table[,c(5,8,7,10,6,9,1,2)]
+  colnames(the_table) = c("bias", "bias_se", "coverage", "coverage_se", "rejection_rate", "rejection_rate_se",
+                          "mean_b_estimate", "b_estimate_std_dev")
+  
+  return(the_table)
+}
+
 # #Mechanical functions (hidden)######
 # #x is numeric
 # check_integer = function(x){
@@ -822,6 +1094,14 @@ get_arrows = function(dag_string){
     return(arrow_list)
   }
 }
+get_custom = function(dag_string){
+  if(class(tryCatch( error_catch(dag_string), error =  function(x) x=1)) =="HydeNetwork"){
+    dag = error_catch(dag_string)
+    nodes = unlist(dag[["nodes"]])
+    return(nodes)
+  }
+}
+
 
 handler_df = function(x){
   test_df = data.frame(unlist(lapply(x(), function(handle) {
@@ -857,15 +1137,22 @@ run_code = function(out_code){
   try_table = beta_summary(run_1)
   try_table = as.data.frame(try_table)
   
-  export_table = data.frame("Bias,\n ± Std. error" = c(paste0(signif(try_table$bias,4), ", ±", signif(try_table$bias_se,4))),
-                            "Coverage , ± Std. error" = c(paste0(signif(try_table$coverage, 3), ", ±", signif(try_table$coverage_se,3))),
-                            "Null rejectuon rate, ±Std. error" = c(paste0(signif(try_table$rejection_rate, 3), ", ±", signif(try_table$rejection_rate_se,3))),
-                            "Mean estimate" = signif(try_table$mean_b_estimate,4),
-                            "Estimate standard deviation" = signif(try_table$b_estimate_std_dev,4),
-                            check.names=FALSE
+  export_table = data.frame("<table class ='table'><tr><th>Method</th>"= paste0("<tr><td>",rownames(try_table), "</td>"),
+                            "<th>Bias, ± Std. error</th>" = c(paste0("<td>",signif(try_table$bias,4), ", ±", signif(try_table$bias_se,4),"</td>")),
+                            "<th>Coverage, ± Std. error</th>" = c(paste0("<td>",signif(try_table$coverage, 3), ", ±", signif(try_table$coverage_se,3),"</td>")),
+                            "<th>Null rejection rate, ±Std. error</th>" = c(paste0("<td>",signif(try_table$rejection_rate, 3), ", ±", signif(try_table$rejection_rate_se,3),"</td>")),
+                            "<th>Mean estimate</th>" = paste0("<td>",signif(try_table$mean_b_estimate,4),"</td>"),
+                            "<th>Estimate Std. deviation</th></tr>" = paste0("<td>",signif(try_table$b_estimate_std_dev,4),"</td></tr>")
   )
-  rownames(export_table) = rownames(try_table)
-  run_list = list(try_plot,export_table)
+  try_row = lapply(1:nrow(export_table),function(x) paste(as.character(export_table[x, ]), collapse = ""))
+  col_add = paste0("<table class ='table'><tr><th>Method</th> <th>Bias, ± Std. error</th><th>Coverage, ± Std. error</th><th>Null rejection rate, ±Std. error</th><th>Mean estimate</th><th>Estimate Std. deviation</th></tr>",
+                   paste(try_row,collapse = ""),"</table>")
+  
+
+
+  #export_table = as_tibble(export_table, rownames = "Analysis Method")
+
+  run_list = list(try_plot,col_add)
   
   return(run_list)
 
