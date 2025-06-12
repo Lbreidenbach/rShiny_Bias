@@ -15,7 +15,7 @@ library("reshape2")
 library(gridExtra)
 source("plot_dag_ui2.R")
 library(purrr)
-library(McBias)
+#library(McBias)
 library(bslib)
 
 
@@ -76,17 +76,29 @@ node_server <- function(input, output, session) {
   ns <- session$ns
   node_name = sub("-", "", session$ns(""))
   output$ui_placeholder <- renderUI({
+    
     type <- req(input$node_dist)
-    if(type == "binary") {
-      numericInput(ns("prev"), paste0(node_name,"'s prevalence (between 0-1):"), 0.5, min = 0, max = 1, step = 0.05)
+    
+    fluidPage(
+      tags$script(HTML(
+        "document.addEventListener('wheel', function(event){
+        if(document.activeElement.type === 'number'){
+            document.activeElement.blur();
+        }
+     });"
+      )),
+      if(type == "binary") {
+        numericInput(ns("prev"), paste0(node_name,"'s prevalence (between 0-1):"), 0.5, min = 0, max = 1, step = 0.05)
+        
+      } else if (type == "Gaussian") {
+        tagList(numericInput(ns("mean"), paste0("Mean of ", node_name,":"),0),
+                numericInput(ns("stdev"), paste0("Std dev of ", node_name,":"), 1),
+        )
+        
+        
+      }
+    )
 
-    } else if (type == "Gaussian") {
-      tagList(numericInput(ns("mean"), paste0("Mean of ", node_name,":"),0),
-              numericInput(ns("stdev"), paste0("Std dev of ", node_name,":"), 1),
-      )
-
-
-    }
   })
 
   ## if we later want to do some more sophisticated logic
@@ -97,8 +109,11 @@ node_server <- function(input, output, session) {
 
 ui <- 
   page_fillable(
-    titlePanel(h1("Bias Simulator", align ="center")),
+    titlePanel(HTML("<b>Bias Simulator</b>
+                    <h6>Download our accompanying McBias library for R <a href='https://github.com/Lbreidenbach/McBias/blob/main/README.md'>here</a><br>
+                    <i>Created and Maintained by Ash Breidenbach, Last Update: April 24, 2025</i></h6>")),
     theme = bs_theme(bootswatch = "minty"),
+    
     card(accordion(
             accordion_panel( id = "set_dag",
               "Set DAG",
@@ -128,7 +143,7 @@ ui <-
                                    #accordion_panel(
                                      "basic settings",
                                      h4("---Set Distributions---", align = "center"),
-                                     HTML("<i>Gaussian distribution assumes non-skewness. More distributions options are availible in the McBias Library for R<br> ___________</i>"),
+                                     HTML("<i>Gaussian distribution assumes non-skewness. Need more distributions? Try the McBias Library for R!<br> ___________</i>"),
                                      uiOutput("node_box"),
                                      div(id="placeholder"),
                                      h4("---Set Beta Values---", align = "center"),
@@ -168,12 +183,15 @@ ui <-
       ), #ends accordion panel 1
       accordion_panel( id = "set_analysis",
         "Set Analysis",
-          
-        h4("---Set Analysis---", align = "center"),
+        
+        h6(HTML("Nodes can only be an exposure <b>or</b> an outcome <b>or</b> a confounder.<br> 
+                Inputs will change to prevent the same node from being put in multiple categories.<br>
+                Double check your analysis before simulating!"), align = "left"),
+        h6(HTML("<i>Note that analyses for repeat values are not available at this time</i><br>_____________"), align = "left"),
         uiOutput("exp"),
         uiOutput("out"),
-        uiOutput("sel"),
-        uiOutput("sel_op"),
+        #uiOutput("sel"),
+        #uiOutput("sel_op"),
         uiOutput("conf"),
         uiOutput("conf_op"),
         actionButton("sim", "Simulate! (takes a few seconds)", width = "100%")
@@ -181,7 +199,7 @@ ui <-
       ), #ends accordion panel 2
       accordion_panel(id = "sim_results",
         "Simulation Results and Code",
-        h4("Plot appears here once analysis is set and the simulate button in 'Set Analysis' is pressed ", align ="center"),
+        h4("Plot appears here once analysis is set and the 'Simulate!' button in 'Set Analysis' is pressed ", align ="center"),
         
         plotOutput("bn_results"),
         htmlOutput("bn_table"),
@@ -276,42 +294,42 @@ server <- function(input, output, session) {
 
   })
 
-  output$sel = renderUI({
-    if(length(handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])==0){
-      fluidRow(column(12,
-                      selectInput("selection", "Choose a node that represents selection bias? (Node must be binary)", choices = c( "No"), selected = "No")
-      )
-      )
-
-    }else{
-      fluidRow(column(12,
-                      selectInput("selection", "Choose a node that represents selection bias? (Node must be binary)", choices = c("Yes", "No"), selected = "No")
-      )
-      )
-
-    }
-
-    # if(length(handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])==0){
-    #   input$selection = "No"
-    # }
-
-  })
-
-  output$sel_op = renderUI({
-    if(input$selection == "Yes"){
-
-      fluidRow(column(12,
-                      radioButtons("sel", "Selection Node", choices = handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])
-      )
-      )
-
-    }else{
-
-    }
-
-
-
-  })
+  # output$sel = renderUI({
+  #   if(length(handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])==0){
+  #     fluidRow(column(12,
+  #                     selectInput("selection", "Choose a node that represents selection bias? (Node must be binary)", choices = c( "No"), selected = "No")
+  #     )
+  #     )
+  # 
+  #   }else{
+  #     fluidRow(column(12,
+  #                     selectInput("selection", "Choose a node that represents selection bias? (Node must be binary)", choices = c("Yes", "No"), selected = "No")
+  #     )
+  #     )
+  # 
+  #   }
+  # 
+  #   # if(length(handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])==0){
+  #   #   input$selection = "No"
+  #   # }
+  # 
+  # })
+  # 
+  # output$sel_op = renderUI({
+  #   if(input$selection == "Yes"){
+  # 
+  #     fluidRow(column(12,
+  #                     radioButtons("sel", "Selection Node", choices = handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])
+  #     )
+  #     )
+  # 
+  #   }else{
+  # 
+  #   }
+  # 
+  # 
+  # 
+  # })
 
   output$conf = renderUI({
     fluidRow(column(12,
@@ -324,18 +342,12 @@ server <- function(input, output, session) {
   output$conf_op = renderUI({
     x = node_ids()
     if(input$adjust == "Yes"){
-      if(input$selection == "Yes"){
-        fluidRow(column(12,
-                        checkboxGroupInput("conf", "Confounders", x[!x==input$exp & !x==input$out & !x==input$sel])
-        )
-        )
-      }else{
+
         fluidRow(column(12,
                         checkboxGroupInput("conf", "Confounders", x[!x==input$exp & !x==input$out])
         )
         )
 
-      }
 
     }else{
 
@@ -386,7 +398,8 @@ server <- function(input, output, session) {
     colnames(test_df) = c("distribution", "holder", "prevalence", "mean", "std_dev", "names")
     beta_df = data.frame(parent = unlist(lapply(beta_id, function(x){strsplit(x, " -> ")[[1]][1]})),
                          child = unlist(lapply(beta_id, function(x){strsplit(x, " -> ")[[1]][2]})),
-                         beta_vals = unlist(lapply(beta_id, function(x) input[[paste(x)]]))
+                         beta_vals = unlist(lapply(beta_id, function(x) input[[paste(x)]])),
+                         std_dev = unlist(lapply(beta_id, function(x){ test_df[test_df$names==strsplit(x, " -> ")[[1]][1],"std_dev"] }))
     )
 
 
@@ -394,7 +407,7 @@ server <- function(input, output, session) {
     bi_nodes_df = test_df[test_df$distribution=="binary",]
     cont_nodes_df = test_df[test_df$distribution=="Gaussian",]
 
-    parent_list = lapply(c(1:length(rownames(test_df))), function(y) beta_df[beta_df[2]==rownames(test_df)[[y]], c(1,3)]) #child == y from the apply functions
+    parent_list = lapply(c(1:length(rownames(test_df))), function(y) beta_df[beta_df[2]==rownames(test_df)[[y]], c(1,3,4)]) #child == y from the apply functions
     names(parent_list) = rownames(test_df)
 
     node_info_list = lapply(c(1:length(rownames(test_df))), function(y) test_df[rownames(test_df)[[y]], c(1:6)])
@@ -403,6 +416,7 @@ server <- function(input, output, session) {
 
     #parent_list[[name]][1], get parent names
     #parent_list[[name]][2], get beta values
+    #parent_list[[name]][3], get std_dev
     #node_info_list[[name]][1,3,4,5,6] get node 1.) distribution, 3.) prev, 4.) mean, 5.)std_dev 6.)name
 
     #make i node name, not index
@@ -417,7 +431,7 @@ server <- function(input, output, session) {
           parent_list[[i]][y,1],
           ' + ",')
       })), collapse = " " )
-
+      
       return(out_glm)
     }
     get_linker = function(i){
@@ -440,7 +454,7 @@ server <- function(input, output, session) {
         col_num = "mean"
       }
       node_info_list[[parent_list[[i]][y,1]]][[col_num]]
-
+      
     }
     identity_link = function(i){
       if(nrow(parent_list[[i]])==0){
@@ -451,7 +465,6 @@ server <- function(input, output, session) {
           get_type(i,y) *-1
       })))
     }
-
     if(nrow(bi_nodes_df)>0){
       bi_code = unlist(lapply(rownames(bi_nodes_df), function(i) {paste0(
         '\ndag = setNode(dag, ',
@@ -487,6 +500,8 @@ server <- function(input, output, session) {
 
     dag_code(code_dag)
     cat(code_dag)
+   
+
     #cat(custom_id)
 
     # lapply(c(1:length(x)), function(i) length(parent_list[[i]][[1]]))
@@ -517,11 +532,11 @@ server <- function(input, output, session) {
     }
 
     #Current Bug: if there's no valid selection node and the user has it set to Yes, then sb is ""
-    if(input$selection == "Yes"){
-      sb = paste0('"', input$sel, '"')
-    }else{
-      sb = format(NULL)
-    }
+    # if(input$selection == "Yes"){
+    #   sb = paste0('"', input$sel, '"')
+    # }else{
+    #   sb = format(NULL)
+    # }
 
 
 
@@ -542,7 +557,7 @@ server <- function(input, output, session) {
       ', dag, exposure = "', input$exp,
       '" , outcome = "', input$out ,
       '" , covariates = ', confounder,
-      ' , sb = ', sb,
+      ' , sb = ', NULL,
       ', n = ', 20000,
       ')')
     
@@ -552,6 +567,7 @@ server <- function(input, output, session) {
     # )
     
     user_code = run_code(capture.output(cat(c(dag_code(), outcome))))
+    
 
     # code_output(run_code(user_code()))
     
@@ -583,11 +599,11 @@ server <- function(input, output, session) {
     }
 
     #Current Bug: if there's no valid selection node and the user has it set to Yes, then sb is ""
-    if(input$selection == "Yes"){
-      sb = paste0('"', input$sel, '"')
-    }else{
-      sb = format(NULL)
-    }
+    # if(input$selection == "Yes"){
+    #   sb = paste0('"', input$sel, '"')
+    # }else{
+    #   sb = format(NULL)
+    # }
 
 
 
@@ -608,10 +624,11 @@ server <- function(input, output, session) {
       ', dag, exposure = "', input$exp,
       '" , outcome = "', input$out ,
       '" , covariates = ', confounder,
-      ' , sb = ', sb,
+      ' , sb = ', NULL,
       ', n = ', 10000,
       ')')
     cat(outcome)
+    
 
   })
 
