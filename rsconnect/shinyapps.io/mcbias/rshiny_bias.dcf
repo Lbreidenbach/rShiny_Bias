@@ -1,0 +1,13 @@
+name: rshiny_bias
+title: rShiny_Bias
+username: mcbias
+account: mcbias
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12777785
+bundleId: 10730961
+url: https://mcbias.shinyapps.io/rshiny_bias/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|testing.R
