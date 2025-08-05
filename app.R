@@ -109,7 +109,7 @@ node_server <- function(input, output, session) {
 
 ui <- 
   page_fillable(
-    titlePanel(HTML("<b>Bias Simulator TEST</b>
+    titlePanel(HTML("<b>Bias Simulator</b>
                     <h6>Download our accompanying McBias library for R <a href='https://github.com/Lbreidenbach/McBias/blob/main/README.md'>here</a><br>
                     <i>Created and Maintained by Ash Breidenbach, Last Update: June 12, 2025</i></h6>")),
     theme = bs_theme(bootswatch = "minty"),
