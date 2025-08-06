@@ -11,7 +11,7 @@ library(ggridges)
 library("reshape2")
 library(gridExtra)
 library(McBias)
-
+#MAYBE FUNCTIONS ##### 
 beta_sum = function(run, a=0.05){
 
   #call needed data
@@ -181,10 +181,10 @@ ci_ridges = function(run, title =NULL, subtitle=NULL){
                    axis.text = element_text(size = 14, face = "bold"),
                    axis.title = element_text(size = 14, face = "bold")) +
     ggplot2::scale_x_continuous(expand = c(0, 0)) +
-    ggplot2::scale_y_discrete(expand = expansion(mult = c(0.01, .1))) +
-    if(max(data$value) > 10 | min(data$value < -10)){
-      ggplot2::xlim(limits[1],limits[2])
-    }
+    ggplot2::scale_y_discrete(expand = expansion(mult = c(0.01, .1))) 
+    # if(max(data$value) > 10 | min(data$value < -10)){
+    #   ggplot2::xlim(limits[1],limits[2])
+    # }
   p
 
   d <- ggplot_build(p)$data[[1]]
@@ -764,7 +764,6 @@ reparse_runs = function(run_list, method = NULL, list_names=as.character(1:lengt
   return(out_df)
 }
 
-
 #####
 #Ui Facing Functions
 #####
@@ -799,9 +798,10 @@ error_catch = function(dag_string){
       stop("Model needs to be acyclic. a node can't reference itself")
     }else if(sum(dag$dag) ==0){
       stop("Model must contain at least 2 nodes and 1 interaction")
+    }else if("try-error" %in% class(try(HydeNetwork(eval(str2lang(paste0(dag_string)))), silent = TRUE))){
+      stop("Write DAG formula box according to above instructions")
     }
     else {
-      
       return(dag)
     }
   }
@@ -810,7 +810,6 @@ error_catch = function(dag_string){
 
 dag_ui = function(dag_string){
   plot(error_catch(dag_string))
-  
 }
 
 get_nodes = function(dag_string){
@@ -871,8 +870,22 @@ get_sum_stats = function(x){
 }
 
 run_code = function(out_code){
-  
+  if("try-error" %in% class(try(eval(parse(text = out_code)), silent = TRUE))){
+    
+    stop("A problem occurred during analysis:\n
+    
+         Very low (p<0.005) or high prevalences (p>0.995) for binary nodes may generate dataset variables with either all controls or all cases.\r
+         If a low (p<0.005) prevalence binary node is stratified, the remaining generated dataset may be too small to be accurate \r
+         Your simulation may require a larger sample size than the server limitation of n=10,000 \n
+
+         Larger log odds ratios, especially from a Gaussian to a Binary node, may create multicollinearity, 
+         as the parent node may become completely predictive of the child node. This may cause problems with analysis
+         ")
+  }
+
   eval(parse(text = out_code))
+  
+  
   try_plot = ci_ridges(run_1)
   
   try_table = beta_summary(run_1)

@@ -18,6 +18,7 @@ library(purrr)
 #library(McBias)
 library(bslib)
 
+options(shiny.sanitize.errors = FALSE)
 
 set_p = function(p,model){
   p2 = log(p/(1-p))
@@ -190,8 +191,8 @@ ui <-
         h6(HTML("<i>Note that analyses for repeat values are not available at this time</i><br>_____________"), align = "left"),
         uiOutput("exp"),
         uiOutput("out"),
-        #uiOutput("sel"),
-        #uiOutput("sel_op"),
+        uiOutput("sel"),
+        uiOutput("sel_op"),
         uiOutput("conf"),
         uiOutput("conf_op"),
         actionButton("sim", "Simulate! (takes a few seconds)", width = "100%")
@@ -208,7 +209,7 @@ ui <-
         verbatimTextOutput("bn_info"),
         h3(HTML("This code recreates your input <i><u>analysis settings</u></i> in R"), align ="left"),
         p(HTML("This code can be copy/pasted from this box to run the set analysis on the created Bayesian network.<br>")),
-        verbatimTextOutput("analysis_info"),
+        verbatimTextOutput("analysis_info", placeholder = T),
         p(HTML("<i>*Due to server bandwidth limitations, the rShiny app sets dataset population <u>n = 10000</u> and the number of MCMC <u>runs = 100,<br>you may want to change this when using the library</u></i>")),
         
         
@@ -294,42 +295,42 @@ server <- function(input, output, session) {
 
   })
 
-  # output$sel = renderUI({
-  #   if(length(handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])==0){
-  #     fluidRow(column(12,
-  #                     selectInput("selection", "Choose a node that represents selection bias? (Node must be binary)", choices = c( "No"), selected = "No")
-  #     )
-  #     )
-  # 
-  #   }else{
-  #     fluidRow(column(12,
-  #                     selectInput("selection", "Choose a node that represents selection bias? (Node must be binary)", choices = c("Yes", "No"), selected = "No")
-  #     )
-  #     )
-  # 
-  #   }
-  # 
-  #   # if(length(handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])==0){
-  #   #   input$selection = "No"
-  #   # }
-  # 
-  # })
-  # 
-  # output$sel_op = renderUI({
-  #   if(input$selection == "Yes"){
-  # 
-  #     fluidRow(column(12,
-  #                     radioButtons("sel", "Selection Node", choices = handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])
-  #     )
-  #     )
-  # 
-  #   }else{
-  # 
-  #   }
-  # 
-  # 
-  # 
-  # })
+  output$sel = renderUI({
+    if(length(handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])==0){
+      fluidRow(column(12,
+                      selectInput("selection", "Choose a node that represents selection bias? (Node must be binary)", choices = c( "No"), selected = "No")
+      )
+      )
+
+    }else{
+      fluidRow(column(12,
+                      selectInput("selection", "Choose a node that represents selection bias? (Node must be binary)", choices = c("Yes", "No"), selected = "No")
+      )
+      )
+
+    }
+
+    # if(length(handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])==0){
+    #   input$selection = "No"
+    # }
+
+  })
+
+  output$sel_op = renderUI({
+    if(input$selection == "Yes"){
+
+      fluidRow(column(12,
+                      radioButtons("sel", "Selection Node", choices = handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])
+      )
+      )
+
+    }else{
+
+    }
+
+
+
+  })
 
   output$conf = renderUI({
     fluidRow(column(12,
@@ -532,11 +533,11 @@ server <- function(input, output, session) {
     }
 
     #Current Bug: if there's no valid selection node and the user has it set to Yes, then sb is ""
-    # if(input$selection == "Yes"){
-    #   sb = paste0('"', input$sel, '"')
-    # }else{
-    #   sb = format(NULL)
-    # }
+    if(input$selection == "Yes"){
+      sb = paste0('"', input$sel, '"')
+    }else{
+      sb = format(NULL)
+    }
 
 
 
@@ -557,8 +558,8 @@ server <- function(input, output, session) {
       ', dag, exposure = "', input$exp,
       '" , outcome = "', input$out ,
       '" , covariates = ', confounder,
-      ' , sb = ', NULL,
-      ', n = ', 20000,
+      ' , sb = ', sb,
+      ', n = ', 10000,
       ')')
     
     # ui.update_accordion_panel(
@@ -578,9 +579,14 @@ server <- function(input, output, session) {
   })
   
   output$bn_table = renderUI({
+    if("try-error" %in% class(try(user_code()[[2]], silent = TRUE))){
+      return()
+    }
+      
     tags$div(
       HTML((user_code()[[2]]))
     )
+
    
     
     
@@ -599,11 +605,11 @@ server <- function(input, output, session) {
     }
 
     #Current Bug: if there's no valid selection node and the user has it set to Yes, then sb is ""
-    # if(input$selection == "Yes"){
-    #   sb = paste0('"', input$sel, '"')
-    # }else{
-    #   sb = format(NULL)
-    # }
+    if(input$selection == "Yes"){
+      sb = paste0('"', input$sel, '"')
+    }else{
+      sb = format(NULL)
+    }
 
 
 
@@ -624,7 +630,7 @@ server <- function(input, output, session) {
       ', dag, exposure = "', input$exp,
       '" , outcome = "', input$out ,
       '" , covariates = ', confounder,
-      ' , sb = ', NULL,
+      ' , sb = ', sb,
       ', n = ', 10000,
       ')')
     cat(outcome)
