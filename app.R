@@ -110,25 +110,52 @@ node_server <- function(input, output, session) {
 
 ui <- 
   page_fillable(
-    titlePanel(HTML("<b>Bias Simulator</b>
-                    <h6>Download our accompanying McBias library for R <a href='https://github.com/Lbreidenbach/McBias/blob/main/README.md'>here</a><br>
-                    <i>Created and Maintained by Ash Breidenbach, Last Update: June 12, 2025</i></h6>")),
+    titlePanel(HTML("<b>Bias Simulator</b>"), windowTitle = "Bias Simulator"
+               ),
     theme = bs_theme(bootswatch = "minty"),
     
-    card(accordion(
+    HTML("<p>Download our accompanying McBias library for R <a href='https://github.com/Lbreidenbach/McBias/blob/main/README.md'>here</a><br>
+                    <i>Created and Maintained by Ash Breidenbach, Last Update: August 11, 2025</i></p>"),
+    card(
+      accordion(
+        open = FALSE,
+        accordion_panel( id = "Tutorial and Toy Example",
+                         
+                         title = "Tutorial and Toy Example",
+                         HTML("<p>Say you're analyzing health records (HR) to find the effect systolic 
+                              blood pressure (SBP) has on diagnosis X. Since SBP and diagnosis X both raise the 
+                              chances someone is in your HR dataset, you're concerned selection bias could influence
+                              your results. By comparing the HR SBP mean and diagnosis X prevalence against a
+                              general population, you create an estimate of how much these factors affect entry into 
+                              your dataset. You model a directed acyclic graph <b><i>
+                              ~Diagnosis_X|SBP + in_HR|SBP * Diagnosis_X</b></i> and run the following simulation shown below:</p>"),
+                         card(
+                           img(src='tutorialimage1.png', align = "right")
+                         ),
+                         HTML("<p>You set the &beta; of SBP to Diagonsis X as 0.011 (in other words, an odds ratio of 1.01 per 1 unit increase of SBP).
+                              According to the results, the bias is about -0.0044, making the average calculated &beta; about 0.0066.
+                              This means, for example, the HR data would predict someone with an SBP of 147 to have odds ratio of 1.18 towards having diagnosis X
+                              instead of the set odds ratio of 1.32.<br> The null rejection rate is also only rejected about 67% of the 
+                              time. According to the covarage, &beta; estimates from the HR will only contain the set &beta; within its
+                              95% confidence intervals only 63% of the time. </p>")
+                         
+        )
+      ),
+      
+      accordion(
             accordion_panel( id = "set_dag",
-              "Set DAG",
-              HTML("<b>Input the directed acyclic graph formula in the text box below and follow this format:</b><br>
+              "Set Directed Acyclic Graph (DAG)",
+              HTML("<h5>Input the DAG formula in the text box below and follow this format:</h5><br>
                                           1. Start formula with '~'<br>
-                                          2. Write which variables cause others like this: 'effect|cause1*cause2*cause_n' or like this 'effect|cause1 + effect|cause2 + effect|cause_n'. <br>
-                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b causes c, write 'b|a + c|b' or 'c|b + b|a'<br>
-                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b, and c has no effect on either, write 'b|a + c'<br>
+                                          2. Write which variables cause others like this: <b>'effect|cause1*cause2*cause_n'</b> or like this <b>'effect|cause1 + effect|cause2 + effect|cause_n'</b>. <br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b causes c, write <b>'b|a + c|b'</b> or <b>'c|b + b|a'</b><br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b, and c has no effect on either, write <b>'b|a + c'</b><br>
                                                   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; There must be at least one variable that affects another<br>
                                                   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Nodes can't have names with spaces<br>
                                                   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Formula can't be cyclical. Cyclical formaulas include:<br>
-                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Self referencing nodes like 'a|a'<br>
-                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Bi-directional arrows like 'b|a + a|b'<br>
-                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Cycles like 'c|b + b|a + a|c'<br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Self referencing nodes like <b>'a|a'</b><br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Bi-directional arrows like <b>'b|a + a|b'</b><br>
+                                                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Cycles like <b>'c|b + b|a + a|c'</b><br>
                                           3. Once the formula is entered, fill out the additional node info on the side"),
               textInput(
                 "dag_text", label = h3("DAG formula box"),
@@ -142,20 +169,21 @@ ui <-
                                  
                                  #accordion(
                                    #accordion_panel(
-                                     "basic settings",
-                                     h4("---Set Distributions---", align = "center"),
-                                     HTML("<i>Gaussian distribution assumes non-skewness. Need more distributions? Try the McBias Library for R!<br> ___________</i>"),
+                                     HTML("<h4><b>Set Distributions for Each Variable in the Simulated Dataset</b></h4>"),
                                      uiOutput("node_box"),
+                                     HTML("<i>Gaussian distribution assumes non-skewness. Need more distributions? Try the McBias Library for R!<br> ___________</i>"),
                                      div(id="placeholder"),
-                                     h4("---Set Beta Values---", align = "center"),
-                                     HTML("<i><b>The beta values represent the following measures:<br>
-                            Any node -> binary node = log(odds ratio)<br>
-                            Binary node -> Gaussian node = means difference<br>
-                            Gaussian node -> Gaussian node = linear coefficient<br></b>
-                            More complicated relationships like interactions and non-linearity can be modeled in the McBias Library for R<br>
-                            ___________</i><br>"),
+                                     HTML("<b><p><h4><b>Set Beta (&beta;) Values Between Variables</b></h4>
+                                     The &beta; values represent the following measures:<br>
+                                     binary node -> binary node = ln(odds ratio)<br>
+                                     Gaussian node -> binary node = ln(odds ratio) per unit increase<br>
+                                     Binary node -> Gaussian node = means difference<br>
+                                     Gaussian node -> Gaussian node = linear coefficient</b>
+                                     <i>More complicated relationships like interactions and non-linearity can be modeled in the McBias Library for R</i></p>"),
+                                    
                                      uiOutput("beta_box"),
-                                     (HTML("<br><i>Finished all node inputs? Time to set the analysis<br> ___________</i><br>"))
+                                     HTML("
+                                     ___________<i><br>Finished all node inputs? Time to set the analysis</i>"),
                                      
                                      
                                    #), #simple panel
@@ -170,7 +198,7 @@ ui <-
                             ),
                             card(
                               
-                            align = "center", mainPanel(h4("Dag plot"),
+                            align = "center", mainPanel(h4("DAG"),
                             grVizOutput("value")
                                                                   
                             ),

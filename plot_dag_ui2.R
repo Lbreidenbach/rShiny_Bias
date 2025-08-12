@@ -895,8 +895,8 @@ run_code = function(out_code){
                             "<th>Bias, ± Std. error</th>" = c(paste0("<td>",signif(try_table$bias,4), ", ±", signif(try_table$bias_se,4),"</td>")),
                             "<th>Coverage, ± Std. error</th>" = c(paste0("<td>",signif(try_table$coverage, 3), ", ±", signif(try_table$coverage_se,3),"</td>")),
                             "<th>Null rejection rate, ±Std. error</th>" = c(paste0("<td>",signif(try_table$rejection_rate, 3), ", ±", signif(try_table$rejection_rate_se,3),"</td>")),
-                            "<th>Mean estimate</th>" = paste0("<td>",signif(try_table$mean_b_estimate,4),"</td>"),
-                            "<th>Estimate Std. deviation</th></tr>" = paste0("<td>",signif(try_table$b_estimate_std_dev,4),"</td></tr>")
+                            "<th>Mean calculated &beta;</th>" = paste0("<td>",signif(try_table$mean_b_estimate,4),"</td>"),
+                            "<th>calculated &beta; Std. deviation</th></tr>" = paste0("<td>",signif(try_table$b_estimate_std_dev,4),"</td></tr>")
   )
   try_row = lapply(1:nrow(export_table),function(x) paste(as.character(export_table[x, ]), collapse = ""))
   col_add = paste0("<table class ='table'><tr><th>Method</th> <th>Bias, ± Std. error</th><th>Coverage, ± Std. error</th><th>Null rejection rate, ±Std. error</th><th>Mean estimate</th><th>Estimate Std. deviation</th></tr>",
@@ -920,8 +920,8 @@ table_code = function(out_code){
   export_table = data.frame("Bias,\n ± Std. error" = c(paste0(signif(try_table$bias,4), ", ±", signif(try_table$bias_se,4))),
                             "Coverage , ± Std. error" = c(paste0(signif(try_table$coverage, 3), ", ±", signif(try_table$coverage_se,3))),
                             "Null rejectuon rate, ±Std. error" = c(paste0(signif(try_table$rejection_rate, 3), ", ±", signif(try_table$rejection_rate_se,3))),
-                            "Mean estimate" = signif(try_table$mean_b_estimate,4),
-                            "Estimate standard deviation" = signif(try_table$b_estimate_std_dev,4),
+                            "Mean calculated &beta;" = signif(try_table$mean_b_estimate,4),
+                            "calculated &beta; Std. deviation" = signif(try_table$b_estimate_std_dev,4),
                             check.names=FALSE
                             )
   rownames(export_table) = rownames(try_table)
