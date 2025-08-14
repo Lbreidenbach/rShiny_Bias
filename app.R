@@ -115,7 +115,7 @@ ui <-
     theme = bs_theme(bootswatch = "minty"),
     
     HTML("<p>Download our accompanying McBias library for R <a href='https://github.com/Lbreidenbach/McBias/blob/main/README.md'>here</a><br>
-                    <i>Created and Maintained by Ash Breidenbach, Last Update: August 11, 2025</i></p>"),
+                    <i>Created and Maintained by Ash Breidenbach, Last Update: August 12, 2025</i></p>"),
     card(
       accordion(
         open = FALSE,
@@ -143,6 +143,7 @@ ui <-
       ),
       
       accordion(
+        id = "main_acc",
             accordion_panel( id = "set_dag",
               "Set Directed Acyclic Graph (DAG)",
               HTML("<h5>Input the DAG formula in the text box below and follow this format:</h5><br>
@@ -544,9 +545,16 @@ server <- function(input, output, session) {
   observeEvent(input$custom_equation,{
     
   })
+  
+  observeEvent(input$sim,{
+    #accordion(id = "main_acc", open = c("set_dag","set_analysis","sim_results"))
+    #"Simulation Results and Code"
+    accordion_panel_open("main_acc", "Simulation Results and Code")
+
+  })
 
   user_code = eventReactive(input$sim, {
-    accordion_panel_open(id = "sim_results", values = "Simulation Results and Code")
+    #accordion_panel_open(id = "sim_results", values = "Simulation Results and Code")
     
     x = node_ids()
     beta_id = beta_ids()
@@ -601,6 +609,8 @@ server <- function(input, output, session) {
     # code_output(run_code(user_code()))
     
   })
+  
+  
   
   output$bn_results = renderPlot({
     user_code()[1]
