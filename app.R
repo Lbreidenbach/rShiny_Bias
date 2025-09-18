@@ -115,7 +115,7 @@ ui <-
     theme = bs_theme(bootswatch = "minty"),
     
     HTML("<p>Download our accompanying McBias library for R <a href='https://github.com/Lbreidenbach/McBias/blob/main/README.md'>here</a><br>
-                    <i>Created and Maintained by Ash Breidenbach, Last Update: August 12, 2025</i></p>"),
+                    <i>Created and Maintained by Ash Breidenbach, Last Update: September 18, 2025</i></p>"),
     card(
       accordion(
         open = FALSE,
@@ -127,7 +127,7 @@ ui <-
                               chances someone is in your HR dataset, you're concerned selection bias could influence
                               your results. By comparing the HR SBP mean and diagnosis X prevalence against a
                               general population, you create an estimate of how much these factors affect entry into 
-                              your dataset. You model a directed acyclic graph <b><i>
+                              your dataset. You model a directed acyclic graph (DAG) <b><i>
                               ~Diagnosis_X|SBP + in_HR|SBP * Diagnosis_X</b></i> and run the following simulation shown below:</p>"),
                          card(
                            img(src='tutorialimage1.png', align = "right")
@@ -146,7 +146,28 @@ ui <-
         id = "main_acc",
             accordion_panel( id = "set_dag",
               "Set Directed Acyclic Graph (DAG)",
-              HTML("<h5>Input the DAG formula in the text box below and follow this format:</h5><br>
+              HTML("<p><h4>How to measure bias with a Directed Acyclic Graph (DAG)</h4>
+              <details>
+              <summary> All variables in a dataset are represented as nodes in a DAG.
+              DAGs model cause and effect by drawing arrows from causal nodes to the nodes they effect.
+              DAGs visualize third variables as nodes that could bias how an exposure node affects an outcome node... <br> </summary> 
+              The online tool, <a href='https://www.dagitty.net/'>Daggity</a>, helps users identify any biasing nodes between the 
+              exposure and outcome, and tells users which nodes to adjust on to avoid bias. We encourage users to understand 
+              formal DAG theory and the identification of adjustment sets prior to using McBias to generate their own DAGs. 
+              McBias simulates datasets from a DAG and quantifies how much biasing variables 
+              make results drift from the set effect size, should a biasing adjustment set be used. </p><br>
+    
+              <p>McBias allows users to include and adjust for mediators (ex. exposure -> mediator -> outcome) in DAGs. 
+              However, McBias assumes that if no arrow is set between variables, than there is no affect between them. 
+              Thus it assumes mediation/indirect effects are a form of bias. Because of this, we strongly discourage users from using McBias to 
+              estimate mediation effects. More sophisticated methods are often 
+              warranted in these circumstances. We refer the users to the following 
+              references for more detail.<br> 
+                   <a href='https://pubmed.ncbi.nlm.nih.gov/9888278/'>Causal diagrams for epidemiologic research </a><br>
+                   <a href='https://pubmed.ncbi.nlm.nih.gov/28089956/'>Robust causal inference using directed acyclic graphs: the R package 'dagitty'</a><br>
+                   <a href='https://pubmed.ncbi.nlm.nih.gov/19234398/'>Marginal structural models for the estimation of direct and indirect effects</a>
+              </details>     </p>"),
+              HTML("<p><b><details open><summary>Input the DAG formula in the text box below and follow this format:</b></summary>
                                           1. Start formula with '~'<br>
                                           2. Write which variables cause others like this: <b>'effect|cause1*cause2*cause_n'</b> or like this <b>'effect|cause1 + effect|cause2 + effect|cause_n'</b>. <br>
                                                   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b causes c, write <b>'b|a + c|b'</b> or <b>'c|b + b|a'</b><br>
@@ -157,13 +178,13 @@ ui <-
                                                   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Self referencing nodes like <b>'a|a'</b><br>
                                                   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Bi-directional arrows like <b>'b|a + a|b'</b><br>
                                                   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; Cycles like <b>'c|b + b|a + a|c'</b><br>
-                                          3. Once the formula is entered, fill out the additional node info on the side"),
+                                          3. Once the formula is entered, fill out the additional node info on the side</p></details><br>"),
+              
               textInput(
-                "dag_text", label = h3("DAG formula box"),
-                value = "~exposure|confounder + outcome|confounder*exposure + collider|exposure*outcome",
+                "dag_text", label = h4("DAG formula text box"),
+                value = "~Exposure|Confounder + Outcome|Confounder*Exposure + Collider|Exposure*Outcome",
                 width = "100%"),
-              
-              
+                            
               layout_columns(
                             
                             card(class="bg-primary",
@@ -172,19 +193,11 @@ ui <-
                                    #accordion_panel(
                                      HTML("<h4><b>Set Distributions for Each Variable in the Simulated Dataset</b></h4>"),
                                      uiOutput("node_box"),
-                                     HTML("<i>Gaussian distribution assumes non-skewness. Need more distributions? Try the McBias Library for R!<br> ___________</i>"),
-                                     div(id="placeholder"),
-                                     HTML("<b><p><h4><b>Set Beta (&beta;) Values Between Variables</b></h4>
-                                     The &beta; values represent the following measures:<br>
-                                     binary node -> binary node = ln(odds ratio)<br>
-                                     Gaussian node -> binary node = ln(odds ratio) per unit increase<br>
-                                     Binary node -> Gaussian node = means difference<br>
-                                     Gaussian node -> Gaussian node = linear coefficient</b>
-                                     <i>More complicated relationships like interactions and non-linearity can be modeled in the McBias Library for R</i></p>"),
-                                    
-                                     uiOutput("beta_box"),
-                                     HTML("
-                                     ___________<i><br>Finished all node inputs? Time to set the analysis</i>"),
+                                     HTML("<i>Gaussian distribution assumes non-skewness. Need more distributions? Try the McBias Library for R!</i>"),
+                                     div(id="placeholder")
+                                     
+                                     #uiOutput("beta_box"),
+                                     
                                      
                                      
                                    #), #simple panel
@@ -196,47 +209,130 @@ ui <-
                                    
                                  #),     
                             
-                            ),
-                            card(
-                              
-                            align = "center", mainPanel(h4("DAG"),
+                            ), # end distribution card
+                            
+                              card(align = "center", 
+                            HTML("<h4>DAG</h4>"),
                             grVizOutput("value")
                                                                   
                             ),
-                            
-                            ),
-                            
-                            
+                            col_widths = c(7, 5)
+
               ),
-              #actionButton("analysis_ui", "Set Analysis!")
+
+                
+                card(
+                  class="bg-primary",
+                  fluidRow(
+                    column(12,
+                           align = "center",
+                           HTML("<b><h4>Set Beta (&beta;) Values Between Variables</b></h4>")
+                           )
+                    
+                  ),
+                  fluidRow(
+                  column(8,
+                         HTML("<style>
+                              a:link {
+                              color: #152654;
+                              background-color: transparent;
+                              text-decoration: underline;
+                              }
+                              a:hover {
+                              color: #A2DDF2;
+                              background-color: transparent;
+                              text-decoration: underline;
+                              }
+                              </style>
+                         <p><b>The &beta; values represent the following measures:</b><br>
+                              Binary node -> binary node = ln(odds ratio)<br>
+                              Gaussian node -> binary node = ln(odds ratio) per unit increase<br>
+                              Binary node -> Gaussian node = means difference<br>
+                              Gaussian node -> Gaussian node = linear coefficient<br>
+
+
+                              <br>
+                              <i>More complicated relationships like interactions and non-linearity 
+                              can be modeled in the McBias Library for R</i></p>
+                              ")
+                         
+                  ),
+                  column(4,
+                         uiOutput("beta_box")
+                  )
+                )
+                  
+                  
+                     
+                     
+                     
+                ),
+              
+              HTML("<i>Finished all node inputs? Time to set the analysis</i>")
+
+            
               
       ), #ends accordion panel 1
       accordion_panel( id = "set_analysis",
         "Set Analysis",
         
-        h6(HTML("Nodes can only be an exposure <b>or</b> an outcome <b>or</b> a confounder.<br> 
+        h6(HTML("<p><details open><summary><b>For setting an analysis...</b></summary><br>Nodes can only be an exposure <b>or</b> an outcome <b>or</b> a 3rd variable.<br> 
                 Inputs will change to prevent the same node from being put in multiple categories.<br>
-                Double check your analysis before simulating!"), align = "left"),
+                Double check your analysis before simulating!<br>
+                Please refer to the following references for introduction to effect measures and odds ratios.<br>
+
+                              <a href='https://pubmed.ncbi.nlm.nih.gov/11004419/'>Choice of effect measure for epidemiological data</a><br>
+                              <a href='https://pubmed.ncbi.nlm.nih.gov/8144304/'>What does the odds ratio estimate in a case-control study? </a><br>
+                              
+                              </details></p>"), align = "left"),
         h6(HTML("<i>Note that analyses for repeat values are not available at this time</i><br>_____________"), align = "left"),
-        uiOutput("exp"),
-        uiOutput("out"),
-        uiOutput("sel"),
-        uiOutput("sel_op"),
-        uiOutput("conf"),
-        uiOutput("conf_op"),
-        actionButton("sim", "Simulate! (takes a few seconds)", width = "100%")
+        fluidRow(
+          column(3,
+                 uiOutput("exp"),
+          ),
+          column(3,
+                 uiOutput("out"),
+          ),
+          column(3,
+                 uiOutput("conf"),
+                 uiOutput("conf_op"),
+          ),
+          column(3,
+                 uiOutput("sel"),
+                 uiOutput("sel_op"),
+          )
+          
+        ),
+        HTML("<br>
+             <b>After setting your analysis click the button below to run the simulation. 
+             The simulation will take a few seconds to run and the results will appear below.</b><br><br>"),
+
+        actionButton("sim", "Click here to simulate!", width = "50%")
 
       ), #ends accordion panel 2
       accordion_panel(id = "sim_results",
         "Simulation Results and Code",
-        h4("Plot appears here once analysis is set and the 'Simulate!' button in 'Set Analysis' is pressed ", align ="center"),
+        h4("Plot appears here once analysis is set and the 'Simulate!' button in 'Set Analysis' is pressed. Graph may take a few seconds to appear.", align ="center"),
         
         plotOutput("bn_results"),
         htmlOutput("bn_table"),
-        h3(HTML("This code recreates your input <i><u>Bayesian Network</i></u> in R"), align ="left"),
+        HTML("<details><summary><b><i>What do the columns in this table mean?</i></b></summary>
+             <b>Bias ± Std. error:</b> The simulations for the RShiny app creates and analyze 100 datasets. In each dataset, it 
+             calculates the estimated effect size between the exposure and outcome.
+             The mean of all these estimated effect sizes is the <b>mean estimate</b>
+             The number you set between the exposure and the outcome in step 1 is assumed to be the set <b>true effect size</b>.
+             Here, bias is the effect size's <b>mean estimate - true effect size</b>. The ± Std. error represents bias's standard error <br>
+             <b>Coverage ± Std. error:</b> The percentage of effect size estimates that have the set 
+             true effect size in their 95% confidence interval. If there's little bias, we 
+             expect the coverage to be around 95%. The ± Std. error reflects the percentage's standard error<br>
+             <b>Null rejection rate ± Std. error: </b> The percentage of effect size estimates that rejected the Null at p=0.05. This measurement 
+             can provide insights to any potential false negatives or postive that bias could influence.<br>
+             <b>Estimate standard deviation:</b> The standard deviation of all effect size estimates.
+             </details><br>"),
+        h4(HTML("This code recreates your input <i><u>Bayesian Network</i></u> in R"), align ="left"),
         p("If the McBias library is in use, this code can be copy/pasted to get a working dag object and results matrix"),
         verbatimTextOutput("bn_info"),
-        h3(HTML("This code recreates your input <i><u>analysis settings</u></i> in R"), align ="left"),
+        h4(HTML("This code recreates your input <i><u>analysis settings</u></i> in R"), align ="left"),
         p(HTML("This code can be copy/pasted from this box to run the set analysis on the created Bayesian network.<br>")),
         verbatimTextOutput("analysis_info", placeholder = T),
         p(HTML("<i>*Due to server bandwidth limitations, the rShiny app sets dataset population <u>n = 10000</u> and the number of MCMC <u>runs = 100,<br>you may want to change this when using the library</u></i>")),
@@ -327,13 +423,13 @@ server <- function(input, output, session) {
   output$sel = renderUI({
     if(length(handler_df(handler)[!handler_df(handler)==input$exp & !handler_df(handler)==input$out])==0){
       fluidRow(column(12,
-                      selectInput("selection", "Choose a node that represents selection bias? (Node must be binary)", choices = c( "No"), selected = "No")
+                      selectInput("selection", "Stratify on a node that represents selection bias? (Node must be binary)", choices = c( "No"), selected = "No")
       )
       )
 
     }else{
       fluidRow(column(12,
-                      selectInput("selection", "Choose a node that represents selection bias? (Node must be binary)", choices = c("Yes", "No"), selected = "No")
+                      selectInput("selection", "Stratify on a node that represents selection bias? (Node must be binary)", choices = c("Yes", "No"), selected = "No")
       )
       )
 
@@ -363,7 +459,7 @@ server <- function(input, output, session) {
 
   output$conf = renderUI({
     fluidRow(column(12,
-                    selectInput("adjust", "Adjust for confounders?", choices = c("Yes", "No"), selected = "No")
+                    selectInput("adjust", "Adjust for 3rd variables?", choices = c("Yes", "No"), selected = "No")
     )
     )
 
@@ -374,7 +470,7 @@ server <- function(input, output, session) {
     if(input$adjust == "Yes"){
 
         fluidRow(column(12,
-                        checkboxGroupInput("conf", "Confounders", x[!x==input$exp & !x==input$out])
+                        checkboxGroupInput("conf", "3rd Variables", x[!x==input$exp & !x==input$out])
         )
         )
 
@@ -619,6 +715,13 @@ server <- function(input, output, session) {
   output$bn_table = renderUI({
     if("try-error" %in% class(try(user_code()[[2]], silent = TRUE))){
       return()
+      # HTML(
+      # "<table class ='table'><tr><th>Method</th><tr><td></td><th>Bias, ± Std. error</th><td>--</td>
+      #                       <th>Coverage, ± Std. error</th><td>--</td>
+      #                       <th>Null rejection rate, ±Std. error</th><td>--</td>
+      #                       <th>Mean calculated &beta;</th><td>--</td>
+      #                       <th>calculated &beta; Std. deviation</th></tr><td>--</td></tr>"
+      # )
     }
       
     tags$div(

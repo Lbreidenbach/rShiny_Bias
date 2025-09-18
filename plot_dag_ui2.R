@@ -1,6 +1,5 @@
 library(HydeNet)
 library(rjags)
-library(MatchIt)
 library(ggplot2)
 library(plyr)
 library(dplyr)
@@ -10,7 +9,8 @@ library(GGally)
 library(ggridges)
 library("reshape2")
 library(gridExtra)
-library(McBias)
+library(parallel)
+#library(McBias)
 #MAYBE FUNCTIONS ##### 
 beta_sum = function(run, a=0.05){
 
@@ -182,10 +182,10 @@ ci_ridges = function(run, title =NULL, subtitle=NULL){
                    axis.text = element_text(size = 18, face = "bold"),
                    axis.title = element_text(size = 18, face = "bold")) +
     ggplot2::scale_x_continuous(expand = c(0, 0)) +
-    ggplot2::scale_y_discrete(expand = expansion(mult = c(0.01, .1))) +
-    if(max(data$value) > 10 | min(data$value < -10)){
-      ggplot2::xlim(limits[1],limits[2])
-    }
+    ggplot2::scale_y_discrete(expand = expansion(mult = c(0.01, .1))) 
+    # if(max(data$value) > 10 | min(data$value < -10)){
+    #   ggplot2::xlim(limits[1],limits[2])
+    # }
   p
   
   d <- ggplot_build(p)$data[[1]]
@@ -324,7 +324,7 @@ make_model = function(dag, ...){
     dag_1 = do.call(dag, arg_list)
   }
 
-  writeNetworkModel(dag_1, pretty = TRUE)
+  #writeNetworkModel(dag_1, pretty = TRUE)
   comp_dag = compileJagsModel(dag_1)
   return(comp_dag)
 }
@@ -524,9 +524,7 @@ apply_methods = function(exposure, outcome, covariates=NULL, sb=NULL, df, ratio=
                       confint_diff = as.numeric(),
                       p_val = as.numeric(),
                       n = as.numeric())
-  if(is.null(match_methods)==F & is.null(covariates)==T){
-    warning("Matching methods cannot be used if no covariates are given and thus were not run.")
-  }
+
 
   #set selection bias here
   if(length(names(which(unlist(lapply(df[,sb],class))=="numeric")))!=0){
@@ -567,30 +565,8 @@ apply_methods = function(exposure, outcome, covariates=NULL, sb=NULL, df, ratio=
 
   }
 
-  #matching quals
-  if(length(find.package("MatchIt", quiet=TRUE))!=1 & is.null(match_methods)==F){
-    warning("You've entered matching methods without the MatchIt package installed. Matching Analyses have been skipped")
-  }
 
-  if(is.null(match_methods)==F & length(find.package("MatchIt", quiet=TRUE))==1){
-    di_df = df
-    if(class(df[,exposure]) == "numeric"){
-      warning("Matching methods require a binary exposure. The exposure has been dichotomized so the top 25% quartile are 1s and the bottom 75% are 0s")
-      di_df = dichotomize(exposure, df, div)
-    }
-
-    match_df_list = lapply(match_methods, function(x) matchit_matching(exposure, covariates, di_df, d = x, ratio))
-    if(class(df[,outcome]) == "numeric"){
-      match_dfs = tot_bind(lapply(c(1:length(match_df_list)), function(x) re(lm_beta(exposure, outcome, df = match_df_list[[x]]), match_methods[[x]])
-      ))
-    }
-    if(class(df[,outcome]) == "integer"){
-      match_dfs = tot_bind(lapply(c(1:length(match_df_list)), function(x) re(odds_ratio(exposure, outcome, df = match_df_list[[x]]), match_methods[[x]])
-      ))
-    }
-
-    tot_df = tot_bind(list(tot_df,match_dfs))
-  }
+  
 
   tot_df = as.data.frame(apply(tot_df, 2, unlist))
   return(tot_df)
@@ -621,6 +597,7 @@ varied_runs = function(runs, dag, exposure, outcome, covariates=NULL, sb=NULL, n
   outcome_eq = unlist(strsplit(outcome_eq, ")", fixed = T))
   outcome_eq = unlist(strsplit(outcome_eq, "(", fixed = T))
   outcome_eq = unlist(strsplit(outcome_eq, "+", fixed = T))
+  outcome_eq = grep("*", outcome_eq, value = T, fixed = T)
   outcome_val = grep(exposure, outcome_eq, value = T)
   outcome_val = gsub(exposure, 1, outcome_val)
   outcome_val = gsub("[[:alpha:]]", "0", outcome_val)
@@ -632,10 +609,10 @@ varied_runs = function(runs, dag, exposure, outcome, covariates=NULL, sb=NULL, n
   #FIX DIMENSION PROBLEM
   sink(nullfile())  
   temp_df = lapply(c(1:runs), function(x) create_data(dag, value_df[x,1], positivity = positivity, ...))
-  sink()
+  
   temp_df = lapply(c(1:runs), function(x) misdiagnosis(temp_df[[x]], misdiagnosis_v, under_r[x], over_r[x]))
-  temp_output = lapply(temp_df, apply_methods, exposure = exposure, outcome = outcome, covariates = covariates, sb = sb, ratio=ratio, match_methods=match_methods)
-
+  temp_output = mclapply(temp_df, apply_methods, exposure = exposure, outcome = outcome, covariates = covariates, sb = sb, ratio=ratio, match_methods=match_methods)
+  sink()
   one_dim = FALSE
   if(names(temp_output[[1]])[1]=="apply(tot_df, 2, unlist)"){
     temp_output = lapply(1:runs,function(x) t(temp_output[[x]]))
@@ -778,24 +755,16 @@ reparse_runs = function(run_list, method = NULL, list_names=as.character(1:lengt
 #####
 #Ui Facing Functions
 #####
+is_cycle = function(dag){
+  times = dim(dag$dag)[1]
+  eval_eq = function(times){
+    temp_eq = rep("dag$dag %*%", times)
+    temp_eq = paste0(paste(temp_eq, collapse = " ")," dag$dag")
+    sum(unlist(lapply(1:dim(dag$dag)[1],function(x) (eval(str2lang(temp_eq)))[x,x])))
+  }
+  return(sum(unlist(lapply(1:times, eval_eq))))
 
-# g <- function(type) {
-#   tryCatch({
-#     f(type)
-#   }, custom_error = function(e) {
-#     err <- conditionMessage(e)
-#     message("found custom_error: ", err)
-#   }, error = function(e) {
-#     err <- conditionMessage(e)
-#     if (startsWith(err, "oops a")) {
-#       message("found type 'a' error: ", err)
-#     } else if (startsWith(err, "oops b")) {
-#       message("found type 'b' error: ", err)
-#     } else {
-#       message("generic error: ", err)
-#     }
-#   })
-# }
+}
 
 error_catch = function(dag_string){
   tryCatch({dag_string}, {
@@ -807,10 +776,14 @@ error_catch = function(dag_string){
       stop("Model needs to be acyclic. Check model for cycle")
     }else if(sum(unlist(lapply(1:dim(dag$dag)[1],function(x) dag$dag[x,x]))) != 0){
       stop("Model needs to be acyclic. a node can't reference itself")
+    }else if(TRUE %in% unlist(lapply(1:dim(dag$dag)[1],function(x) 2 %in% c(dag$dag[,x]+dag$dag[x,]))) != FALSE){
+      stop("Model can't contain bidirectional arrows")
     }else if(sum(dag$dag) ==0){
       stop("Model must contain at least 2 nodes and 1 interaction")
     }else if("try-error" %in% class(try(HydeNetwork(eval(str2lang(paste0(dag_string)))), silent = TRUE))){
       stop("Write DAG formula box according to above instructions")
+    }else if(is_cycle(dag)!= 0){
+      stop("Model needs to be acyclic. Check model for cycle")
     }
     else {
       return(dag)
@@ -818,9 +791,12 @@ error_catch = function(dag_string){
   }
   )
 }
-
+#unlist(lapply(1:dim(dag$dag)[1],function(x) c(sum(dag$dag[,x]),sum(dag$dag[x,]))))
 dag_ui = function(dag_string){
   plot(error_catch(dag_string))
+}
+eq_ui =function(dag_string){
+  writeNetworkModel(error_catch(dag_string), pretty = TRUE)
 }
 
 get_nodes = function(dag_string){
@@ -883,14 +859,13 @@ get_sum_stats = function(x){
 run_code = function(out_code){
   if("try-error" %in% class(try(eval(parse(text = out_code)), silent = TRUE))){
     
-    stop("A problem occurred during analysis:\n
+    stop("A problem occurred during analysis, check model for these possible issues:\r
     
-         Very low (p<0.005) or high prevalences (p>0.995) for binary nodes may generate dataset variables with either all controls or all cases.\r
-         If a low (p<0.005) prevalence binary node is stratified, the remaining generated dataset may be too small to be accurate \r
-         Your simulation may require a larger sample size than the server limitation of n=10,000 \n
+         1. Very low (p<0.005) or high prevalences (p>0.995) for binary nodes may generate dataset variables with either all controls or all cases. Your simulation may require a larger sample size than the server limitation of n=10,000 to ensure positivity.\r 
+         
+         2. If a low (p<0.005) prevalence binary node is stratified, the remaining generated dataset may be too small to be accurate. You may require a larger sample size than the server limitation of n=10,000. Additionally, if you wish to retain the sample size, consider adjusting on the collider instead of stratifying on it.\r 
 
-         Larger log odds ratios, especially from a Gaussian to a Binary node, may create multicollinearity, 
-         as the parent node may become completely predictive of the child node. This may cause problems with analysis
+         3. Larger log odds ratios, especially from a Gaussian to a Binary node, may create multicollinearity, as the parent node may become completely predictive of the child node. This may cause problems with analysis.
          ")
   }
 
@@ -930,7 +905,7 @@ table_code = function(out_code){
   
   export_table = data.frame("Bias,\n ± Std. error" = c(paste0(signif(try_table$bias,4), ", ±", signif(try_table$bias_se,4))),
                             "Coverage , ± Std. error" = c(paste0(signif(try_table$coverage, 3), ", ±", signif(try_table$coverage_se,3))),
-                            "Null rejectuon rate, ±Std. error" = c(paste0(signif(try_table$rejection_rate, 3), ", ±", signif(try_table$rejection_rate_se,3))),
+                            "Null rejection rate, ±Std. error" = c(paste0(signif(try_table$rejection_rate, 3), ", ±", signif(try_table$rejection_rate_se,3))),
                             "Mean calculated &beta;" = signif(try_table$mean_b_estimate,4),
                             "calculated &beta; Std. deviation" = signif(try_table$b_estimate_std_dev,4),
                             check.names=FALSE
