@@ -2,7 +2,7 @@ library(shiny)
 library(DiagrammeR)
 library(HydeNet)
 library(rjags)
-library(MatchIt)
+#library(MatchIt)
 library(ggplot2)
 library(plyr)
 library(shinydashboard)
@@ -112,10 +112,10 @@ ui <-
   page_fillable(
     titlePanel(HTML("<b>Bias Simulator</b>"), windowTitle = "Bias Simulator"
                ),
-    theme = bs_theme(bootswatch = "minty"),
+    theme = bs_theme(bootswatch = "sandstone"),
     
     HTML("<p>Download our accompanying McBias library for R <a href='https://github.com/Lbreidenbach/McBias/blob/main/README.md'>here</a><br>
-                    <i>Created and Maintained by Ash Breidenbach, Last Update: September 18, 2025</i></p>"),
+                    <i>Created and Maintained by Ash Breidenbach, Last Update: September 21, 2025</i></p>"),
     card(
       accordion(
         open = FALSE,
@@ -125,18 +125,18 @@ ui <-
                          HTML("<p>Say you're analyzing health records (HR) to find the effect systolic 
                               blood pressure (SBP) has on diagnosis X. Since SBP and diagnosis X both raise the 
                               chances someone is in your HR dataset, you're concerned selection bias could influence
-                              your results. By comparing the HR SBP mean and diagnosis X prevalence against a
-                              general population, you create an estimate of how much these factors affect entry into 
-                              your dataset. You model a directed acyclic graph (DAG) <b><i>
+                              your results. You compare the SBP mean and diagnosis X prevalence within the HR dataset against a
+                              general population, and create an estimate of how much these two variables impact entry into 
+                              your dataset. You model this directed acyclic graph (DAG) <b><i>
                               ~Diagnosis_X|SBP + in_HR|SBP * Diagnosis_X</b></i> and run the following simulation shown below:</p>"),
                          card(
                            img(src='tutorialimage1.png', align = "right")
                          ),
                          HTML("<p>You set the &beta; of SBP to Diagonsis X as 0.011 (in other words, an odds ratio of 1.01 per 1 unit increase of SBP).
-                              According to the results, the bias is about -0.0044, making the average calculated &beta; about 0.0066.
+                              According to the results, the bias is about -0.0044, making the average calculated &beta; about 0.0066 per unit increase.
                               This means, for example, the HR data would predict someone with an SBP of 147 to have odds ratio of 1.18 towards having diagnosis X
                               instead of the set odds ratio of 1.32.<br> The null rejection rate is also only rejected about 67% of the 
-                              time. According to the covarage, &beta; estimates from the HR will only contain the set &beta; within its
+                              time. According to the covarage, &beta; estimates from the HR will contain the set &beta; within its
                               95% confidence intervals only 63% of the time. </p>")
                          
         )
@@ -150,15 +150,19 @@ ui <-
               <details>
               <summary> All variables in a dataset are represented as nodes in a DAG.
               DAGs model cause and effect by drawing arrows from causal nodes to the nodes they effect.
-              DAGs visualize third variables as nodes that could bias how an exposure node affects an outcome node... <br> </summary> 
-              The online tool, <a href='https://www.dagitty.net/'>Daggity</a>, helps users identify any biasing nodes between the 
-              exposure and outcome, and tells users which nodes to adjust on to avoid bias. We encourage users to understand 
-              formal DAG theory and the identification of adjustment sets prior to using McBias to generate their own DAGs. 
-              McBias simulates datasets from a DAG and quantifies how much biasing variables 
+              DAGs visualize 3rd variables as nodes that could bias how an exposure node affects an outcome node.
+              The online tool, <a href='https://www.dagitty.net/'>Daggity</a>, helps users identify any 
+              biasing nodes between the exposure and outcome, and tells users which nodes to adjust on to avoid bias. 
+              We encourage users to understand formal DAG theory and identify adjustment sets of intrest 
+              prior to running simulations with McBias.
+              <p class='text-primary'> <i> Click to read more... </i></p> </summary> 
+              This RShiny app creates generalized linear models (GLMs) that allow it to simulate full datasets that reflect all input values.
+              Through anaylzing these datasets, it quantifies how much biasing 3rd variables 
               make results drift from the set effect size, should a biasing adjustment set be used. </p><br>
     
               <p>McBias allows users to include and adjust for mediators (ex. exposure -> mediator -> outcome) in DAGs. 
-              However, McBias assumes that if no arrow is set between variables, than there is no affect between them. 
+              McBias assumes that if no arrow is set between variables, than there is no effect between them. 
+              McBias also assumes that the &beta; effect size set between variables is the only true effect size.
               Thus it assumes mediation/indirect effects are a form of bias. Because of this, we strongly discourage users from using McBias to 
               estimate mediation effects. More sophisticated methods are often 
               warranted in these circumstances. We refer the users to the following 
@@ -169,7 +173,7 @@ ui <-
               </details>     </p>"),
               HTML("<p><b><details open><summary>Input the DAG formula in the text box below and follow this format:</b></summary>
                                           1. Start formula with '~'<br>
-                                          2. Write which variables cause others like this: <b>'effect|cause1*cause2*cause_n'</b> or like this <b>'effect|cause1 + effect|cause2 + effect|cause_n'</b>. <br>
+                                          2. Write which variables cause others like this: <b>'effect|cause1*cause2*cause_n'</b> or like this <b>'effect|cause1 + effect|cause2 + effect|cause_n'</b> <br>
                                                   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b causes c, write <b>'b|a + c|b'</b> or <b>'c|b + b|a'</b><br>
                                                   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; If a causes b, and c has no effect on either, write <b>'b|a + c'</b><br>
                                                   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8226; There must be at least one variable that affects another<br>
@@ -232,23 +236,18 @@ ui <-
                   ),
                   fluidRow(
                   column(8,
-                         HTML("<style>
-                              a:link {
-                              color: #152654;
-                              background-color: transparent;
-                              text-decoration: underline;
-                              }
-                              a:hover {
-                              color: #A2DDF2;
-                              background-color: transparent;
-                              text-decoration: underline;
-                              }
-                              </style>
-                         <p><b>The &beta; values represent the following measures:</b><br>
+                         HTML("
+                              <p><b>The &beta; values represent the following measures:</b><br>
                               Binary node -> binary node = ln(odds ratio)<br>
                               Gaussian node -> binary node = ln(odds ratio) per unit increase<br>
                               Binary node -> Gaussian node = means difference<br>
                               Gaussian node -> Gaussian node = linear coefficient<br>
+                              <br>
+                              <b>This RShiny app does not measure risk ratios.</b> <br> 
+                              The following references provide an introduction to effect measures and odds ratios.<br>
+                              <a href='https://pubmed.ncbi.nlm.nih.gov/11004419/'>Choice of effect measure for epidemiological data</a><br>
+                              <a href='https://pubmed.ncbi.nlm.nih.gov/8144304/'>What does the odds ratio estimate in a case-control study? </a><br>
+                              <a href='https://pmc.ncbi.nlm.nih.gov/articles/PMC9908057/'>Reflection on modern methods: risk ratio regression</a><br>
 
 
                               <br>
@@ -260,14 +259,16 @@ ui <-
                   column(4,
                          uiOutput("beta_box")
                   )
-                )
-                  
-                  
-                     
+                ),
                      
                      
                 ),
-              
+              HTML("<h4>This code recreates your input values as a <i><u>Bayesian Network</i></u> in the McBias library.</h4> 
+                   <p>Each <code>setNode()</code> line specifies the specific generalized linear model which is 
+                   created from the input distributions and beta values. The simulated datasets will reflect all 
+                   means, prevalences, and effect size estimates input here.</p>
+                   <i>Note this code takes precision instead of std. dev. Thus, tau = 1/(std. dev)^2 for Gaussian nodes.</i>"),
+              verbatimTextOutput("bn_info"),
               HTML("<i>Finished all node inputs? Time to set the analysis</i>")
 
             
@@ -276,16 +277,10 @@ ui <-
       accordion_panel( id = "set_analysis",
         "Set Analysis",
         
-        h6(HTML("<p><details open><summary><b>For setting an analysis...</b></summary><br>Nodes can only be an exposure <b>or</b> an outcome <b>or</b> a 3rd variable.<br> 
+        HTML("<p><b>For setting an analysis...</b><br>Nodes can only be an exposure <b>or</b> an outcome <b>or</b> a 3rd variable.<br> 
                 Inputs will change to prevent the same node from being put in multiple categories.<br>
-                Double check your analysis before simulating!<br>
-                Please refer to the following references for introduction to effect measures and odds ratios.<br>
-
-                              <a href='https://pubmed.ncbi.nlm.nih.gov/11004419/'>Choice of effect measure for epidemiological data</a><br>
-                              <a href='https://pubmed.ncbi.nlm.nih.gov/8144304/'>What does the odds ratio estimate in a case-control study? </a><br>
-                              
-                              </details></p>"), align = "left"),
-        h6(HTML("<i>Note that analyses for repeat values are not available at this time</i><br>_____________"), align = "left"),
+                Double check your analysis before simulating!<br></p>"),
+        HTML("<i>Note that analyses for repeat values are not available at this time</i><br>_____________"),
         fluidRow(
           column(3,
                  uiOutput("exp"),
@@ -329,11 +324,8 @@ ui <-
              can provide insights to any potential false negatives or postive that bias could influence.<br>
              <b>Estimate standard deviation:</b> The standard deviation of all effect size estimates.
              </details><br>"),
-        h4(HTML("This code recreates your input <i><u>Bayesian Network</i></u> in R"), align ="left"),
-        p("If the McBias library is in use, this code can be copy/pasted to get a working dag object and results matrix"),
-        verbatimTextOutput("bn_info"),
         h4(HTML("This code recreates your input <i><u>analysis settings</u></i> in R"), align ="left"),
-        p(HTML("This code can be copy/pasted from this box to run the set analysis on the created Bayesian network.<br>")),
+        p(HTML("This code can be copy/pasted from this box to run the set analysis on the created Bayesian network and get a results list.<br>")),
         verbatimTextOutput("analysis_info", placeholder = T),
         p(HTML("<i>*Due to server bandwidth limitations, the rShiny app sets dataset population <u>n = 10000</u> and the number of MCMC <u>runs = 100,<br>you may want to change this when using the library</u></i>")),
         
@@ -380,7 +372,7 @@ server <- function(input, output, session) {
     
     custom_id = get_custom(input$dag_text)
     output$set_nodes = renderUI({
-      map(custom_id, ~textInput3(.x, label = paste0( .x), value = "", placeholder = "dag = setNode(dag, node, nodeType = 'distribution', ...)"))
+      map(custom_id, ~textInput3(.x, label = paste0( .x), value = "", placeholder = "dag <- setNode(dag, node, nodeType = 'distribution', ...)"))
     })
 
     node_ids(x)
@@ -593,7 +585,7 @@ server <- function(input, output, session) {
     }
     if(nrow(bi_nodes_df)>0){
       bi_code = unlist(lapply(rownames(bi_nodes_df), function(i) {paste0(
-        '\ndag = setNode(dag, ',
+        '\ndag <- setNode(dag, ',
         node_info_list[[i]][6],
         ', nodeType = "dbern", prob = paste0("ilogit(",',
         paste(get_glm(i), get_linker(i), collapse = " "),',")"))')}
@@ -605,7 +597,7 @@ server <- function(input, output, session) {
 
     if(nrow(cont_nodes_df)>0){
       cont_code = unlist(lapply(rownames(cont_nodes_df), function(i)
-      {paste0('\ndag = setNode(dag, ',
+      {paste0('\ndag <- setNode(dag, ',
               node_info_list[[i]][6], ', nodeType = "dnorm", mu = paste0(',
               paste(get_glm(i), identity_link(i), collapse = " "),
               " + ",
@@ -618,7 +610,7 @@ server <- function(input, output, session) {
       cont_code = NULL
     }
 
-    code_dag = c(paste0("dag = HydeNetwork("
+    code_dag = c(paste0("dag <- HydeNetwork("
                         ,input$dag_text,")"),
                  bi_code,
                  cont_code, "\n","\n"
@@ -686,7 +678,7 @@ server <- function(input, output, session) {
     }
 
     outcome = paste0(
-      '\nrun_1 = varied_runs(', 100,
+      '\nrun_1 <- varied_runs(', 100,
       ', dag, exposure = "', input$exp,
       '" , outcome = "', input$out ,
       '" , covariates = ', confounder,
@@ -767,7 +759,7 @@ server <- function(input, output, session) {
     }
 
     outcome = paste0(
-      'run_1 = varied_runs(runs=', 100,
+      'run_1 <- varied_runs(runs=', 100,
       ', dag, exposure = "', input$exp,
       '" , outcome = "', input$out ,
       '" , covariates = ', confounder,
